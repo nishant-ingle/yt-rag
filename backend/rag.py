@@ -49,7 +49,7 @@ def build_source_dict(chunk: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def classify_query(question: str) -> QueryMode:
+async def classify_query(question: str, provider: str = "openai", chat_key: str = "") -> QueryMode:
     """Classify user question into lookup, opinion, or evolution."""
     q_lower = question.lower()
 
