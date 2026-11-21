@@ -2,6 +2,8 @@
 
 A high-performance, embedded Retrieval-Augmented Generation (RAG) system designed to index YouTube playlists, extract timestamped transcripts, and answer nuanced questions with exact timestamp deep links, overall opinion synthesis, and longitudinal opinion evolution over time.
 
+![yt-rag Opinion Synthesis UI](<images/opinion on string theory.png>)
+
 Focused initially on **Abhijit Chavda**'s channel ([@AbhijitChavda](https://www.youtube.com/@AbhijitChavda)) with playlists:
 - **#AskAbhijit**: `https://youtube.com/playlist?list=PLSw9nXpYo3m6Bb_MVBgd0jRE3U4hJvZkd`
 - **Abhijit Chavda Podcast**: `https://youtube.com/playlist?list=PLSw9nXpYo3m7CUa1yvPZmxYCLkchGa9-e`
@@ -21,13 +23,19 @@ Focused initially on **Abhijit Chavda**'s channel ([@AbhijitChavda](https://www.
    - No temporary `.srt` files on disk.
    - Allows instant offline re-indexing or re-chunking without hitting YouTube API rate limits.
 
-3. **Zero-Friction LLM Switching**:
-   - Supports both cloud OpenAI (`gpt-4o-mini`, `text-embedding-3-small`) and local Ollama (`llama3.1:8b`, `nomic-embed-text`) through standard OpenAI-compatible endpoints with zero code modifications.
+3. **Multi-Provider BYOK & Local LLMs**:
+   - Built-in multi-provider support: OpenAI (`gpt-4o-mini`), Google Gemini (`gemini-2.5-flash`), Anthropic Claude (`claude-sonnet-4-6`), or local Ollama.
+   - BYOK (Bring Your Own Key) sidebar configuration stored securely in session storage.
 
-4. **Three Query Modes**:
-   - **Timestamp Lookup**: Finds specific quotes and facts with clickable `https://youtu.be/{video_id}?t={start_sec}` links.
+4. **Multi-Mode RAG & Real-Time Streaming**:
+   - **Timestamp Lookup**: Finds specific quotes and facts with clickable `https://youtu.be/{video_id}?t={start_sec}` deep links.
    - **Overall Opinion Synthesis**: Synthesizes the creator's view across distinct videos (capped at 2 chunks per video).
    - **Opinion Evolution Over Time**: Sorts matching chunks chronologically by `upload_date` to contrast early versus recent stances.
+   - **Token Streaming (SSE)**: Streams tokens in real time (< 500ms TTFT) with live citations.
+
+5. **Rate-Limit Resilience & Background Batch Sync**:
+   - Polite request spacing (2.5s pacing) and automatic handling of YouTube HTTP 429 rate limits.
+   - Automated scheduled batch sync script (`backend/batch_sync.py`) for syncing large playlists over time.
 
 ---
 
@@ -35,26 +43,32 @@ Focused initially on **Abhijit Chavda**'s channel ([@AbhijitChavda](https://www.
 
 ```text
 yt-rag/
-├── .env.example             # Template for OpenAI and Ollama configurations
-├── .gitignore               # Ignored environments, cache, and db files
-├── README.md                # Project documentation and guide
-├── SPEC.md                  # Complete architectural and implementation specification
-├── start.sh                 # One-command setup & launch script
+├── images/
+│   └── opinion on string theory.png # Screenshot demo
 ├── backend/
 │   ├── __init__.py
+│   ├── batch_sync.py        # Automated batch sync runner
 │   ├── config.py            # Pydantic settings & hardcoded playlists
 │   ├── db.py                # SQLite + sqlite-vec + FTS5 storage layer & hybrid search
-│   ├── ingest.py            # Incremental playlist sync & time-window chunker (Step 3)
-│   ├── rag.py               # Query router & multi-mode RAG engine (Step 4)
-│   ├── main.py              # FastAPI app (Step 5)
+│   ├── ingest.py            # Incremental playlist sync & time-window chunker
+│   ├── rag.py               # Query router, multi-mode RAG engine & streaming
+│   ├── main.py              # FastAPI app & static file server
 │   └── requirements.txt     # Pinned Python dependencies
 ├── data/
 │   └── rag.db               # SQLite database (auto-created on db.init_db())
-└── frontend/
-    ├── package.json
-    └── src/
-        ├── App.tsx          # React UI (Step 6)
-        └── api.ts
+├── frontend/
+│   ├── package.json
+│   └── src/
+│       ├── App.tsx          # React UI with streaming & citations drawer
+│       └── api.ts           # Frontend API client
+├── tests/
+│   └── test_sync_rate_limit.py
+├── .env.example             # Template for OpenAI and Ollama configurations
+├── Dockerfile               # Production multi-stage container
+├── render.yaml              # Render deployment configuration
+├── start.sh                 # One-command setup & launch script
+├── README.md                # Project documentation and guide
+└── SPEC.md                  # Complete architectural and implementation specification
 ```
 
 ---
