@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: yt-rag
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    # Port the app listens on (Render sets $PORT automatically)
+    # The Dockerfile CMD uses $PORT with a default of 8000
+    envVars:
+      # --- Embedding (required for query-time embedding) ---
+      - key: EMBED_BASE_URL
+        value: https://api.openai.com/v1
+      - key: EMBED_API_KEY
+        sync: false          # set via Render dashboard — your OpenAI key
+      - key: EMBED_MODEL
+        value: text-embedding-3-small
+      - key: EMBED_DIM
+        value: "1536"
+
+      # --- Read-only guard (recommended for public deploys) ---
+      - key: READ_ONLY_MODE
+        value: "true"
+
+      # --- Optional: server-side LLM key fallback ---
+      # If you want users to chat without entering their own key,
+      # set LLM_API_KEY here (OpenAI key). Leave blank to require BYOK.
+      # - key: LLM_API_KEY
+      #   sync: false
+
+      # --- Optional: admin token to allow sync in read-only mode ---
+      # - key: ADMIN_TOKEN
+      #   generateValue: true
