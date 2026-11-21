@@ -73,7 +73,7 @@ yt-rag/
 
 ---
 
-## Database Schema (Step 2)
+## Database Schema
 
 - **`playlist_videos`**: `(playlist_id, video_id)` composite primary key mapping videos to playlists. Videos shared across playlists are indexed only once.
 - **`videos`**: `video_id`, `title`, `upload_date`, `duration`, `raw_segments_json`, `status` (`'indexed'` or `'no_transcript'`), `synced_at`.
@@ -96,14 +96,25 @@ yt-rag/
 - Python 3.11+
 - Node.js 20+
 
-### 2. Setup Virtual Environment & Install Dependencies
+### 2. One-Command Launch (Recommended)
+Run the automated launch script, which configures `.env`, sets up the Python virtual environment, installs backend dependencies, builds the frontend UI, and launches the server:
+```bash
+./start.sh
+```
+Then open [http://localhost:8000](http://localhost:8000) in your browser.
+
+---
+
+### Manual Setup (Alternative)
+
+#### 1. Setup Virtual Environment & Install Dependencies
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
 ```
 
-### 3. Configure `.env`
+#### 2. Configure Environment
 Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
@@ -125,30 +136,39 @@ EMBED_DIM=1536
 # EMBED_DIM=768
 ```
 
-### 4. Initialize Database
+*(Note: You can also use BYOK in the web UI sidebar to provide OpenAI, Gemini, or Claude API keys per session without setting server keys).*
+
+#### 3. Build Frontend
 ```bash
-python -c "import backend.db as db; db.init_db()"
+cd frontend
+npm install
+npm run build
+cd ..
 ```
 
-### 5. Run Verification Checks
-To verify the Step 1 & Step 2 implementations:
+#### 4. Run Server
 ```bash
-python -c "
-import backend.db as db
-from backend.config import settings
-db.init_db()
-print('Database initialized at:', settings.DB_PATH)
-print('Configured playlists:', [p['name'] for p in settings.PLAYLISTS])
-"
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
 ---
 
-## Roadmap
+## Background Batch Sync
 
-- [x] **Step 1**: Project Scaffolding & Unified Configuration
-- [x] **Step 2**: SQLite + `sqlite-vec` + FTS5 Storage Layer & Hybrid Search
-- [x] **Step 3**: Incremental Ingestion & Timestamp-Preserving Chunker (`yt-dlp` + `youtube-transcript-api`)
-- [x] **Step 4**: Multi-Mode RAG Engine (Lookup, Opinion, Evolution)
-- [x] **Step 5**: FastAPI Backend & Single-Port Static Serving
-- [x] **Step 6**: React + TypeScript + Tailwind UI & One-Command Launcher
+To sync larger playlists incrementally in the background with automatic pacing to avoid YouTube rate limits:
+```bash
+# Sync a single batch of up to 28 videos per playlist
+python -m backend.batch_sync --batch 28 --once
+
+# Or run continuously on a recurring schedule (e.g., every 4 hours)
+python -m backend.batch_sync --batch 28 --interval-hours 4
+```
+
+---
+
+## Running Tests
+
+Run the test suite with:
+```bash
+python -m unittest discover tests
+```
