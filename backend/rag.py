@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
+import time
 from typing import Any, Literal
 
 from openai import AsyncOpenAI
 
 import backend.db as db
 from backend.config import settings
+
+logger = logging.getLogger(__name__)
 
 QueryMode = Literal["lookup", "opinion", "evolution"]
 
@@ -66,6 +70,7 @@ async def classify_query(question: str, provider: str = "openai", chat_key: str 
         r"\bhow has his (view|opinion|stance|position)\b",
     ]
     if any(re.search(pat, q_lower) for pat in evolution_patterns):
+        logger.debug("Query classified as 'evolution' via regex heuristics.")
         return "evolution"
 
     # 2. Opinion regex heuristics
@@ -78,9 +83,11 @@ async def classify_query(question: str, provider: str = "openai", chat_key: str 
         r"\bwhat does he think (about|of)\b",
     ]
     if any(re.search(pat, q_lower) for pat in opinion_patterns):
+        logger.debug("Query classified as 'opinion' via regex heuristics.")
         return "opinion"
 
     # 3. LLM classifier fallback
+    logger.debug("No regex match — using LLM to classify query (provider=%s).", provider)
     client, model = get_chat_client_and_model(provider, chat_key)
     try:
         response = await client.chat.completions.create(
@@ -104,11 +111,15 @@ async def classify_query(question: str, provider: str = "openai", chat_key: str 
         )
         content = (response.choices[0].message.content or "").strip().lower()
         if "evolution" in content:
+            logger.debug("LLM classified query as 'evolution'.")
             return "evolution"
         if "opinion" in content:
+            logger.debug("LLM classified query as 'opinion'.")
             return "opinion"
+        logger.debug("LLM classified query as 'lookup'.")
         return "lookup"
-    except Exception:
+    except Exception as e:
+        logger.warning("LLM query classification failed (%s), defaulting to 'lookup'.", e)
         return "lookup"
 
 
@@ -144,6 +155,9 @@ async def run_lookup_pipeline(
     embed_key: str = "",
 ) -> dict[str, Any]:
     """Lookup mode: fact and timestamp retrieval with top-8 chunks."""
+    logger.info("Running LOOKUP pipeline: playlist_id=%s", playlist_id)
+    t0 = time.perf_counter()
+
     query_emb = await get_query_embedding(question, embed_key=embed_key)
     raw_chunks = await asyncio.to_thread(
         db.hybrid_search,
@@ -154,12 +168,14 @@ async def run_lookup_pipeline(
     )
 
     if not raw_chunks:
+        logger.info("Lookup: no relevant chunks found.")
         return {
             "answer": "No relevant transcript chunks found for this query in the indexed videos.",
             "mode": "lookup",
             "sources": [],
         }
 
+    logger.debug("Lookup: %d chunk(s) retrieved from hybrid search.", len(raw_chunks))
     sources = [build_source_dict(c) for c in raw_chunks]
 
     context_blocks = []
@@ -180,6 +196,7 @@ async def run_lookup_pipeline(
     )
 
     client, model = get_chat_client_and_model(provider, chat_key)
+    logger.debug("Lookup: calling LLM (model=%s) for synthesis.", model)
     completion = await client.chat.completions.create(
         model=model,
         messages=[
@@ -189,6 +206,7 @@ async def run_lookup_pipeline(
         temperature=0.2,
     )
     answer = completion.choices[0].message.content or ""
+    logger.info("Lookup pipeline complete: %d source(s), %.2fs elapsed.", len(sources), time.perf_counter() - t0)
 
     return {
         "answer": answer,
@@ -205,6 +223,9 @@ async def run_opinion_pipeline(
     embed_key: str = "",
 ) -> dict[str, Any]:
     """Opinion mode: broad synthesis across distinct videos (capped at 2 chunks per video)."""
+    logger.info("Running OPINION pipeline: playlist_id=%s", playlist_id)
+    t0 = time.perf_counter()
+
     query_emb = await get_query_embedding(question, embed_key=embed_key)
     raw_chunks = await asyncio.to_thread(
         db.hybrid_search,
@@ -215,11 +236,14 @@ async def run_opinion_pipeline(
     )
 
     if not raw_chunks:
+        logger.info("Opinion: no relevant chunks found.")
         return {
             "answer": "No relevant transcript chunks found for this query in the indexed videos.",
             "mode": "opinion",
             "sources": [],
         }
+
+    logger.debug("Opinion: %d chunk(s) retrieved, deduplicating per video...", len(raw_chunks))
 
     # Deduplicate: cap to maximum 2 chunks per video_id, max 12 chunks total
     deduped_chunks: list[dict[str, Any]] = []
@@ -234,6 +258,10 @@ async def run_opinion_pipeline(
         if len(deduped_chunks) >= 12:
             break
 
+    logger.debug(
+        "Opinion: %d chunk(s) after dedup across %d unique video(s).",
+        len(deduped_chunks), len(video_chunk_counts),
+    )
     sources = [build_source_dict(c) for c in deduped_chunks]
 
     context_blocks = []
@@ -255,6 +283,7 @@ async def run_opinion_pipeline(
     )
 
     client, model = get_chat_client_and_model(provider, chat_key)
+    logger.debug("Opinion: calling LLM (model=%s) for synthesis.", model)
     completion = await client.chat.completions.create(
         model=model,
         messages=[
@@ -264,6 +293,7 @@ async def run_opinion_pipeline(
         temperature=0.3,
     )
     answer = completion.choices[0].message.content or ""
+    logger.info("Opinion pipeline complete: %d source(s), %.2fs elapsed.", len(sources), time.perf_counter() - t0)
 
     return {
         "answer": answer,
@@ -280,6 +310,9 @@ async def run_evolution_pipeline(
     embed_key: str = "",
 ) -> dict[str, Any]:
     """Evolution mode: chronological synthesis analyzing how views evolved over time."""
+    logger.info("Running EVOLUTION pipeline: playlist_id=%s", playlist_id)
+    t0 = time.perf_counter()
+
     query_emb = await get_query_embedding(question, embed_key=embed_key)
     raw_chunks = await asyncio.to_thread(
         db.hybrid_search,
@@ -290,6 +323,7 @@ async def run_evolution_pipeline(
     )
 
     if not raw_chunks:
+        logger.info("Evolution: no relevant chunks found.")
         return {
             "answer": "No relevant transcript chunks found for this query in the indexed videos.",
             "mode": "evolution",
@@ -303,12 +337,15 @@ async def run_evolution_pipeline(
     )
 
     sources = [build_source_dict(c) for c in sorted_chunks]
+    logger.debug("Evolution: %d chunk(s) retrieved, sorted chronologically.", len(sorted_chunks))
 
     # Group chunks chronologically by upload year/date
     grouped_context: dict[str, list[dict[str, Any]]] = {}
     for s in sources:
         year_key = (s["upload_date"][:4]) if s["upload_date"] else "Undated"
         grouped_context.setdefault(year_key, []).append(s)
+
+    logger.debug("Evolution: %d time period(s) identified: %s", len(grouped_context), list(grouped_context.keys()))
 
     chronological_blocks = []
     for period, period_sources in grouped_context.items():
@@ -332,6 +369,7 @@ async def run_evolution_pipeline(
     )
 
     client, model = get_chat_client_and_model(provider, chat_key)
+    logger.debug("Evolution: calling LLM (model=%s) for synthesis.", model)
     completion = await client.chat.completions.create(
         model=model,
         messages=[
@@ -341,6 +379,7 @@ async def run_evolution_pipeline(
         temperature=0.3,
     )
     answer = completion.choices[0].message.content or ""
+    logger.info("Evolution pipeline complete: %d source(s), %.2fs elapsed.", len(sources), time.perf_counter() - t0)
 
     return {
         "answer": answer,
@@ -360,9 +399,12 @@ async def query_rag(
     """Unified entry point for multi-mode RAG queries."""
     chosen_mode: QueryMode
     if mode == "auto":
+        logger.info("Mode is 'auto' — classifying query with provider '%s'.", provider)
         chosen_mode = await classify_query(question, provider=provider, chat_key=chat_key)
+        logger.info("Auto-classified query mode: '%s'.", chosen_mode)
     else:
         chosen_mode = mode
+        logger.info("Using explicit query mode: '%s'.", chosen_mode)
 
     if chosen_mode == "lookup":
         return await run_lookup_pipeline(
@@ -377,6 +419,7 @@ async def query_rag(
             question, playlist_id=playlist_id, provider=provider, chat_key=chat_key, embed_key=embed_key
         )
     else:
+        logger.warning("Unknown mode '%s', falling back to lookup.", chosen_mode)
         return await run_lookup_pipeline(
             question, playlist_id=playlist_id, provider=provider, chat_key=chat_key, embed_key=embed_key
         )

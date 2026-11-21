@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 from contextlib import contextmanager
@@ -13,11 +14,14 @@ import sqlite_vec
 
 from backend.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 def get_db(db_path: str | Path | None = None) -> sqlite3.Connection:
     """Connect to SQLite database and load sqlite-vec extension."""
     target_path = Path(db_path or settings.DB_PATH)
     target_path.parent.mkdir(parents=True, exist_ok=True)
+    logger.debug("Opening database connection: %s", target_path)
 
     conn = sqlite3.connect(target_path)
     conn.row_factory = sqlite3.Row
@@ -40,6 +44,7 @@ def get_db_context(db_path: str | Path | None = None) -> Generator[sqlite3.Conne
 
 def init_db(db_path: str | Path | None = None) -> None:
     """Initialize database tables, virtual tables, and triggers."""
+    logger.info("Initializing database schema at: %s", db_path or settings.DB_PATH)
     with get_db_context(db_path) as conn:
         with conn:
             # 1. Playlist-to-video mapping table
@@ -157,12 +162,17 @@ def upsert_video_and_chunks(
     title = video_data.get("title", "")
     upload_date = video_data.get("upload_date", "")
     duration = int(video_data.get("duration", 0) or 0)
+    status = video_data.get("status", "indexed")
+
+    logger.debug(
+        "Upserting video '%s' (%s): status=%s, chunks=%d, playlist=%s",
+        title, video_id, status, len(chunks) if chunks else 0, playlist_id,
+    )
 
     raw_segments = video_data.get("raw_segments_json", "[]")
     if not isinstance(raw_segments, str):
         raw_segments = json.dumps(raw_segments)
 
-    status = video_data.get("status", "indexed")
     synced_at = video_data.get("synced_at") or datetime.now(timezone.utc).isoformat()
 
     with get_db_context(db_path) as conn:
@@ -287,6 +297,10 @@ def hybrid_search(
     db_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     """Hybrid search combining sqlite-vec vector similarity and FTS5 BM25 with Reciprocal Rank Fusion."""
+    logger.debug(
+        "Hybrid search: query_text=%r, playlist_id=%s, date_from=%s, date_to=%s, limit=%d",
+        (query_text or "")[:80], playlist_id, date_from, date_to, limit,
+    )
     k_candidates = max(limit * 4, 60)
     vec_results: list[tuple[int, float]] = []
     fts_results: list[tuple[int, float]] = []
@@ -364,6 +378,7 @@ def hybrid_search(
             rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + (1.0 / (rrf_k + rank))
 
         if not rrf_scores:
+            logger.debug("Hybrid search: no results from either vector or FTS search.")
             return []
 
         # Top chunk IDs by RRF score
@@ -391,4 +406,8 @@ def hybrid_search(
                 item["score"] = score
                 final_results.append(item)
 
+        logger.debug(
+            "Hybrid search: vec=%d hits, fts=%d hits, rrf_candidates=%d, returned=%d results.",
+            len(vec_results), len(fts_results), len(rrf_scores), len(final_results),
+        )
         return final_results

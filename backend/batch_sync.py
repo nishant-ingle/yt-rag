@@ -7,14 +7,22 @@ Usage:
 import argparse
 import asyncio
 import datetime
+import logging
 import sys
 
 import backend.ingest as ingest
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
 
 async def run_batch(batch_size: int = 28) -> int:
     """Run a single batch sync and return count of indexed videos."""
-    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting batch sync (max {batch_size} videos per playlist)...")
+    logger.info("Starting batch sync (max %d videos per playlist)...", batch_size)
     indexed_count = 0
     rate_limited = False
 
@@ -26,23 +34,27 @@ async def run_batch(batch_size: int = 28) -> int:
         tot = event.get("total", 0)
 
         if status == "processing":
-            print(f"  [{cur}/{tot}] Processing: {title} ({pl})")
+            logger.info("[%d/%d] Processing: %s (%s)", cur, tot, title, pl)
         elif status == "indexed":
             indexed_count += 1
             chunks = event.get("chunk_count", 0)
-            print(f"  ✓ Indexed: {title} ({chunks} chunks)")
+            logger.info("✓ Indexed: %s (%d chunks)", title, chunks)
         elif status == "rate_limited":
             rate_limited = True
             msg = event.get("message", "")
-            print(f"  ⚠️ Rate limited: {msg}")
+            logger.warning("⚠️  Rate limited: %s", msg)
             break
         elif status == "no_transcript":
-            print(f"  - Skipped (no transcript): {title}")
+            logger.info("— Skipped (no transcript): %s", title)
+        elif status == "skipped":
+            logger.info("— Skipped (no data): %s", title)
+        elif status == "linked":
+            logger.info("⇢ Linked (already indexed): %s", title)
 
     if rate_limited:
-        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Batch paused due to rate limits. Will retry on next scheduled interval.")
+        logger.warning("Batch paused due to rate limits. Will retry on next scheduled interval.")
     else:
-        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Batch complete! Newly indexed: {indexed_count} videos.")
+        logger.info("Batch complete! Newly indexed: %d video(s).", indexed_count)
 
     return indexed_count
 
@@ -58,16 +70,16 @@ async def main():
         await run_batch(args.batch)
         return
 
-    print(f"Starting scheduled batch sync: {args.batch} videos every {args.interval_hours} hours. Press Ctrl+C to stop.")
+    logger.info("Starting scheduled batch sync: %d videos every %.1f hour(s). Press Ctrl+C to stop.", args.batch, args.interval_hours)
     while True:
         try:
             await run_batch(args.batch)
         except Exception as e:
-            print(f"Error during batch sync: {e}")
+            logger.error("Error during batch sync: %s", e, exc_info=True)
 
         sleep_seconds = int(args.interval_hours * 3600)
         next_run = datetime.datetime.now() + datetime.timedelta(seconds=sleep_seconds)
-        print(f"Sleeping until next batch at {next_run.strftime('%Y-%m-%d %H:%M:%S')} ({args.interval_hours}h)...")
+        logger.info("Sleeping until next batch at %s (%.1fh)...", next_run.strftime("%Y-%m-%d %H:%M:%S"), args.interval_hours)
         await asyncio.sleep(sleep_seconds)
 
 
@@ -75,5 +87,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nBatch sync stopped by user.")
+        logger.info("Batch sync stopped by user.")
         sys.exit(0)
