@@ -26,7 +26,7 @@ import {
   fetchSyncStatus,
   clearRateLimitApi,
   syncPlaylistsStream,
-  sendChatMessage,
+  sendChatMessageStream,
   PlaylistStat,
   ChatResponse,
   SyncEvent,
@@ -215,10 +215,39 @@ export default function App() {
 
     setLoadingChat(true);
     setChatError(null);
+    setChatResponse(null);
     try {
       const plId = selectedPlaylist === 'all' ? null : selectedPlaylist;
-      const res = await sendChatMessage(question, plId, mode, provider, apiKey);
-      setChatResponse(res);
+      await sendChatMessageStream(
+        question,
+        plId,
+        mode,
+        provider,
+        apiKey,
+        (event) => {
+          if (event.type === 'sources') {
+            setChatResponse({
+              answer: '',
+              mode: event.mode || (mode === 'auto' ? 'lookup' : mode),
+              sources: event.sources || [],
+            });
+          } else if (event.type === 'delta' && event.text) {
+            setChatResponse((prev) => {
+              if (!prev) {
+                return {
+                  answer: event.text || '',
+                  mode: mode === 'auto' ? 'lookup' : mode,
+                  sources: [],
+                };
+              }
+              return {
+                ...prev,
+                answer: prev.answer + event.text,
+              };
+            });
+          }
+        },
+      );
     } catch (err: any) {
       setChatError(err.message || 'Error executing query');
     } finally {
@@ -631,8 +660,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Loading State */}
-          {loadingChat && (
+          {/* Loading State: show when loading and no streamed response yet */}
+          {loadingChat && !chatResponse && (
             <div className="p-8 max-w-3xl mx-auto rounded-2xl bg-slate-900/40 border border-slate-800/80 animate-pulse space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-4 h-4 rounded-full bg-red-500 animate-ping" />
@@ -658,7 +687,7 @@ export default function App() {
           )}
 
           {/* Response Display */}
-          {chatResponse && !loadingChat && (
+          {chatResponse && (
             <div className="max-w-3xl mx-auto space-y-6">
               {/* Answer Card */}
               <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-xl space-y-4">
@@ -670,6 +699,12 @@ export default function App() {
                     <span className="text-xs text-slate-400">
                       {chatResponse.sources.length} citations retrieved
                     </span>
+                    {loadingChat && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 font-medium animate-pulse ml-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                        Generating...
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -700,6 +735,9 @@ export default function App() {
                   >
                     {chatResponse.answer}
                   </ReactMarkdown>
+                  {loadingChat && (
+                    <span className="inline-block w-2 h-4 bg-red-500 animate-pulse ml-0.5 align-middle" />
+                  )}
                 </div>
               </div>
 

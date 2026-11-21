@@ -126,6 +126,77 @@ export async function syncPlaylistsStream(
   }
 }
 
+export interface ChatStreamEvent {
+  type: 'sources' | 'delta' | 'done' | 'error';
+  mode?: 'lookup' | 'opinion' | 'evolution';
+  sources?: SourceItem[];
+  text?: string;
+  message?: string;
+}
+
+export async function sendChatMessageStream(
+  question: string,
+  playlistId: string | null = null,
+  mode: 'auto' | 'lookup' | 'opinion' | 'evolution' = 'auto',
+  provider: string = 'openai',
+  apiKey: string = '',
+  onEvent?: (event: ChatStreamEvent) => void,
+): Promise<void> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Provider': provider,
+  };
+  if (apiKey) {
+    headers['X-Api-Key'] = apiKey;
+  }
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      question,
+      playlist_id: playlistId || null,
+      mode,
+      stream: true,
+    }),
+  });
+
+  if (!res.ok || !res.body) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to process chat message');
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('data: ')) {
+        const jsonStr = trimmed.slice(6);
+        try {
+          const parsed = JSON.parse(jsonStr) as ChatStreamEvent;
+          if (parsed.type === 'error') {
+            throw new Error(parsed.message || 'Error from streaming endpoint');
+          }
+          if (onEvent) onEvent(parsed);
+        } catch (e: any) {
+          if (e.message && e.message !== 'Unexpected end of JSON input') {
+            throw e;
+          }
+        }
+      }
+    }
+  }
+}
+
 export async function sendChatMessage(
   question: string,
   playlistId: string | null = null,

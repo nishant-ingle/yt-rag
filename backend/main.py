@@ -67,6 +67,10 @@ class ChatRequest(BaseModel):
         default="auto",
         description="Retrieval & synthesis mode",
     )
+    stream: bool = Field(
+        default=False,
+        description="Stream synthesized answer tokens using Server-Sent Events",
+    )
 
 
 @app.get("/health")
@@ -203,9 +207,37 @@ async def chat_endpoint(
         )
 
     logger.info(
-        "Chat request: mode=%s, provider=%s, playlist_id=%s, question=%r",
-        req.mode, provider, req.playlist_id, req.question[:120],
+        "Chat request: mode=%s, provider=%s, playlist_id=%s, stream=%s, question=%r",
+        req.mode, provider, req.playlist_id, req.stream, req.question[:120],
     )
+
+    if req.stream:
+        async def chat_sse_stream() -> AsyncGenerator[str, None]:
+            try:
+                async for event in rag.query_rag_stream(
+                    question=req.question,
+                    playlist_id=req.playlist_id,
+                    mode=req.mode,
+                    provider=provider,
+                    chat_key=chat_key,
+                    embed_key=embed_key,
+                ):
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as e:
+                err_msg = str(e)
+                logger.error("Chat streaming error: %s", err_msg, exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': err_msg})}\n\n"
+
+        return StreamingResponse(
+            chat_sse_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     start = time.perf_counter()
     try:
         response = await rag.query_rag(
