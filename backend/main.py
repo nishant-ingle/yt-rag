@@ -189,6 +189,9 @@ async def chat_endpoint(
         provider = "openai"
 
     request_api_key = (x_api_key or "").strip()
+    # Ignore stale 'ollama' key cached from local_llama branch if provider is not ollama
+    if request_api_key == "ollama" and provider != "ollama":
+        request_api_key = ""
     chat_key = request_api_key or settings.LLM_API_KEY
     if not chat_key:
         logger.warning("Chat request rejected: no API key provided.")
