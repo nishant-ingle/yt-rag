@@ -18,6 +18,8 @@ import {
   Lock,
   Eye,
   EyeOff,
+  MessageSquare,
+  Bot,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -45,7 +47,7 @@ export default function App() {
 
   const [playlists, setPlaylists] = useState<PlaylistStat[]>([]);
   const [selectedPlaylist, setSelectedPlaylist] = useState<string>('all');
-  const [mode, setMode] = useState<'auto' | 'lookup' | 'opinion' | 'evolution'>('auto');
+  const [mode, setMode] = useState<'abhijit_ai' | 'lookup' | 'opinion' | 'evolution' | 'freeform'>('abhijit_ai');
   const [question, setQuestion] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
@@ -228,7 +230,7 @@ export default function App() {
           if (event.type === 'sources') {
             setChatResponse({
               answer: '',
-              mode: event.mode || (mode === 'auto' ? 'lookup' : mode),
+              mode: event.mode || mode,
               sources: event.sources || [],
             });
           } else if (event.type === 'delta' && event.text) {
@@ -236,7 +238,7 @@ export default function App() {
               if (!prev) {
                 return {
                   answer: event.text || '',
-                  mode: mode === 'auto' ? 'lookup' : mode,
+                  mode: event.mode || mode,
                   sources: [],
                 };
               }
@@ -256,10 +258,11 @@ export default function App() {
   }
 
   const modeLabels: Record<string, { label: string; desc: string; icon: any }> = {
-    auto: { label: 'Auto', desc: 'Auto-classify query intent', icon: Sparkles },
+    abhijit_ai: { label: 'Abhijit AI', desc: 'How Abhijit would hypothetically answer (#AskAbhijit)', icon: Bot },
     lookup: { label: 'Find Timestamp', desc: 'Direct quotes & exact moments', icon: Search },
     opinion: { label: 'Overall Opinion', desc: 'Synthesize consistent thesis', icon: Layers },
     evolution: { label: 'Opinion Over Time', desc: 'Chronological stance analysis', icon: History },
+    freeform: { label: 'Freeform', desc: '#AskAbhijit Episode 9000', icon: MessageSquare },
   };
 
   return (
@@ -583,13 +586,17 @@ export default function App() {
           </div>
         )}
         {/* Controls Bar */}
-        <header className="p-4 border-b border-slate-800 bg-slate-900/30 flex flex-wrap items-center justify-between gap-3">
+        <header className="p-4 border-b border-slate-800 bg-slate-900/30 flex flex-wrap items-center justify-between gap-3 relative z-10">
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400 font-medium">Scope:</span>
             <select
               value={selectedPlaylist}
               onChange={(e) => setSelectedPlaylist(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500"
+              disabled={mode === 'freeform'}
+              className={`bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500 ${
+                mode === 'freeform' ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              title={mode === 'freeform' ? 'Playlist scope is not applicable in Freeform mode' : undefined}
             >
               <option value="all">All Playlists ({playlists.reduce((acc, p) => acc + p.indexed_count, 0)} videos)</option>
               {playlists.map((pl) => (
@@ -602,24 +609,52 @@ export default function App() {
 
           {/* Mode Selector Tabs */}
           <div className="flex items-center gap-1 p-1 bg-slate-900/80 rounded-xl border border-slate-800">
-            {(['auto', 'lookup', 'opinion', 'evolution'] as const).map((m) => {
+            {(['abhijit_ai', 'lookup', 'opinion', 'evolution', 'freeform'] as const).map((m) => {
               const item = modeLabels[m];
               const Icon = item.icon;
               const active = mode === m;
               return (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                    active
-                      ? 'bg-red-600 text-white shadow-sm shadow-red-900/50'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                  }`}
-                  title={item.desc}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {item.label}
-                </button>
+                <div key={m} className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => setMode(m)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                      active
+                        ? 'bg-red-600 text-white shadow-sm shadow-red-900/50'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {item.label}
+                  </button>
+                  {/* Floating Mode Tooltip */}
+                  <div
+                    className={`absolute ${
+                      m === 'abhijit_ai'
+                        ? 'left-0'
+                        : m === 'freeform'
+                        ? 'right-0'
+                        : 'left-1/2 -translate-x-1/2'
+                    } top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none`}
+                  >
+                    <div
+                      className={`w-2 h-2 -mb-1 rotate-45 bg-slate-800 border-l border-t border-slate-700 ${
+                        m === 'abhijit_ai'
+                          ? 'self-start ml-6'
+                          : m === 'freeform'
+                          ? 'self-end mr-6'
+                          : ''
+                      }`}
+                    />
+                    <div className="bg-slate-800 text-slate-200 border border-slate-700 text-[11px] rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap font-normal">
+                      <div className="font-semibold text-slate-100 flex items-center gap-1">
+                        <Icon className="w-3 h-3 text-red-400" />
+                        {item.label}
+                      </div>
+                      <div className="text-slate-400 text-[10px] mt-0.5">{item.desc}</div>
+                    </div>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -635,15 +670,17 @@ export default function App() {
               </div>
               <h2 className="text-lg font-semibold text-slate-200 mb-1">YouTube Synthesis & Timestamp Deep Search</h2>
               <p className="text-xs text-slate-400 mb-6">
-                Ask specific questions to lookup timestamps, request an overall opinion synthesis, or analyze opinion evolution over time.
+                Ask specific questions to lookup timestamps, request an overall opinion synthesis, analyze opinion evolution over time, ask anything freely, or hear how Abhijit Chavda would hypothetically answer.
               </p>
 
               {/* Sample Queries */}
               <div className="grid grid-cols-1 gap-2 w-full text-left">
                 {[
+                  'What is your take on the multipolar world order and space exploration? (Abhijit AI)',
                   'What does he say about String Theory and Quantum Mechanics?',
                   'How has his view on geopolitics and history changed over time?',
                   'What is his overall philosophy on Indian education and history?',
+                  'Explain quantum computing in simple terms (Freeform)',
                 ].map((sample, idx) => (
                   <button
                     key={idx}
@@ -666,7 +703,11 @@ export default function App() {
               <div className="flex items-center gap-3">
                 <div className="w-4 h-4 rounded-full bg-red-500 animate-ping" />
                 <span className="text-sm text-slate-300 font-medium">
-                  Synthesizing transcripts with hybrid vector + FTS retrieval...
+                  {mode === 'freeform'
+                    ? 'Generating freeform response...'
+                    : mode === 'abhijit_ai'
+                    ? 'Synthesizing response in Abhijit Chavda persona (#AskAbhijit)...'
+                    : 'Synthesizing transcripts with hybrid vector + FTS retrieval...'}
                 </span>
               </div>
               <div className="h-4 bg-slate-800 rounded w-3/4" />
@@ -694,11 +735,21 @@ export default function App() {
                 <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wide uppercase bg-red-500/10 text-red-400 border border-red-500/20">
-                      Mode: {chatResponse.mode}
+                      Mode: {modeLabels[chatResponse.mode]?.label || chatResponse.mode}
                     </span>
-                    <span className="text-xs text-slate-400">
-                      {chatResponse.sources.length} citations retrieved
-                    </span>
+                    {chatResponse.mode === 'freeform' ? (
+                      <span className="text-xs text-slate-400">
+                        Open inquiry (no video constraints)
+                      </span>
+                    ) : chatResponse.mode === 'abhijit_ai' ? (
+                      <span className="text-xs text-slate-400">
+                        #AskAbhijit Persona {chatResponse.sources.length > 0 ? `(${chatResponse.sources.length} video citations)` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">
+                        {chatResponse.sources.length} citations retrieved
+                      </span>
+                    )}
                     {loadingChat && (
                       <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 font-medium animate-pulse ml-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />

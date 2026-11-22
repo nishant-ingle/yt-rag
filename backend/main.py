@@ -63,7 +63,7 @@ class SyncRequest(BaseModel):
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, description="User question to synthesize")
     playlist_id: str | None = Field(default=None, description="Optional playlist scope")
-    mode: Literal["auto", "lookup", "opinion", "evolution"] = Field(
+    mode: Literal["auto", "lookup", "opinion", "evolution", "freeform", "abhijit_ai"] = Field(
         default="auto",
         description="Retrieval & synthesis mode",
     )
@@ -199,7 +199,7 @@ async def chat_endpoint(
 
     # Resolve embedding key: server EMBED_API_KEY -> LLM_API_KEY -> user's OpenAI key if using openai
     embed_key = settings.EMBED_API_KEY or settings.LLM_API_KEY or (request_api_key if provider == "openai" else "")
-    if not embed_key:
+    if not embed_key and req.mode not in ("freeform", "abhijit_ai"):
         logger.warning("Chat request rejected: no embedding key available (provider=%s).", provider)
         raise HTTPException(
             status_code=401,

@@ -34,7 +34,7 @@ export interface SourceItem {
 
 export interface ChatResponse {
   answer: string;
-  mode: 'lookup' | 'opinion' | 'evolution';
+  mode: 'lookup' | 'opinion' | 'evolution' | 'freeform' | 'abhijit_ai';
   sources: SourceItem[];
 }
 
@@ -128,7 +128,7 @@ export async function syncPlaylistsStream(
 
 export interface ChatStreamEvent {
   type: 'sources' | 'delta' | 'done' | 'error';
-  mode?: 'lookup' | 'opinion' | 'evolution';
+  mode?: 'lookup' | 'opinion' | 'evolution' | 'freeform' | 'abhijit_ai';
   sources?: SourceItem[];
   text?: string;
   message?: string;
@@ -137,7 +137,7 @@ export interface ChatStreamEvent {
 export async function sendChatMessageStream(
   question: string,
   playlistId: string | null = null,
-  mode: 'auto' | 'lookup' | 'opinion' | 'evolution' = 'auto',
+  mode: 'auto' | 'lookup' | 'opinion' | 'evolution' | 'freeform' | 'abhijit_ai' = 'auto',
   provider: string = 'openai',
   apiKey: string = '',
   onEvent?: (event: ChatStreamEvent) => void,
@@ -200,7 +200,7 @@ export async function sendChatMessageStream(
 export async function sendChatMessage(
   question: string,
   playlistId: string | null = null,
-  mode: 'auto' | 'lookup' | 'opinion' | 'evolution' = 'auto',
+  mode: 'auto' | 'lookup' | 'opinion' | 'evolution' | 'freeform' | 'abhijit_ai' = 'auto',
   provider: string = 'openai',
   apiKey: string = '',
 ): Promise<ChatResponse> {

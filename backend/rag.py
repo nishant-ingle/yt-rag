@@ -1,4 +1,4 @@
-"""Multi-mode RAG engine (Lookup, Opinion, Evolution)."""
+"""Multi-mode RAG engine (Lookup, Opinion, Evolution, Freeform, Abhijit AI)."""
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +15,7 @@ from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-QueryMode = Literal["lookup", "opinion", "evolution"]
+QueryMode = Literal["lookup", "opinion", "evolution", "freeform", "abhijit_ai"]
 
 # In-memory LRU cache for query embeddings to avoid repeated embedding API latency
 _EMBED_CACHE_MAX = 256
@@ -61,6 +61,20 @@ def build_source_dict(chunk: dict[str, Any]) -> dict[str, Any]:
 async def classify_query(question: str, provider: str = "openai", chat_key: str = "") -> QueryMode:
     """Classify user question into lookup, opinion, or evolution."""
     q_lower = question.lower()
+
+    # 0. Abhijit AI persona regex heuristics
+    abhijit_patterns = [
+        r"\bhow would abhijit\b",
+        r"\bwhat would abhijit\b",
+        r"\babhijit('s)? take\b",
+        r"\bask abhijit\b",
+        r"\bin abhijit('s)? voice\b",
+        r"\bas abhijit\b",
+        r"\bhypothetically abhijit\b",
+    ]
+    if any(re.search(pat, q_lower) for pat in abhijit_patterns):
+        logger.debug("Query classified as 'abhijit_ai' via regex heuristics.")
+        return "abhijit_ai"
 
     # 1. Evolution regex heuristics
     evolution_patterns = [
@@ -126,11 +140,13 @@ async def classify_query(question: str, provider: str = "openai", chat_key: str 
                     "role": "system",
                     "content": (
                         "You are a query router for a YouTube video transcript RAG system. "
-                        "Classify the question into exactly one category: lookup, opinion, or evolution.\n"
+                        "Classify the question into exactly one category: lookup, opinion, evolution, freeform, or abhijit_ai.\n"
                         "- lookup: Specific facts, exact quotes, definitions, single events, or timestamp lookup.\n"
                         "- opinion: Broad viewpoint, philosophy, thesis, or general stance on a topic.\n"
                         "- evolution: How views, stance, or predictions changed or developed over time or across years.\n"
-                        "Reply with ONLY one lowercase word: lookup, opinion, or evolution."
+                        "- freeform: General knowledge, coding, advice, or questions not specifically about video transcripts.\n"
+                        "- abhijit_ai: Questions asking how Abhijit Chavda would hypothetically answer, or questions directly addressing Abhijit in first person.\n"
+                        "Reply with ONLY one lowercase word: lookup, opinion, evolution, freeform, or abhijit_ai."
                     ),
                 },
                 {"role": "user", "content": question},
@@ -139,6 +155,12 @@ async def classify_query(question: str, provider: str = "openai", chat_key: str 
             max_tokens=6,
         )
         content = (response.choices[0].message.content or "").strip().lower()
+        if "abhijit" in content:
+            logger.debug("LLM classified query as 'abhijit_ai'.")
+            return "abhijit_ai"
+        if "freeform" in content:
+            logger.debug("LLM classified query as 'freeform'.")
+            return "freeform"
         if "evolution" in content:
             logger.debug("LLM classified query as 'evolution'.")
             return "evolution"
@@ -245,6 +267,60 @@ def build_prompt_and_sources(
         user_content = f"Evidence from Transcripts:\n\n{context_text}\n\nQuestion: {question}"
         return system_prompt, user_content, sources
 
+    elif mode == "freeform":
+        system_prompt = (
+            "You are a helpful, versatile, and knowledgeable AI assistant.\n"
+            "Instructions:\n"
+            "1. Answer any question asked by the user clearly, accurately, and comprehensively.\n"
+            "2. You can discuss general knowledge, science, history, coding, creative tasks, advice, or any topic.\n"
+            "3. Format your responses with clean, readable markdown."
+        )
+        user_content = question
+        return system_prompt, user_content, []
+
+    elif mode == "abhijit_ai":
+        sources = [build_source_dict(c) for c in raw_chunks] if raw_chunks else []
+        if sources:
+            context_blocks = []
+            for s in sources:
+                context_blocks.append(
+                    f"Video: {s['title']} | Date: {format_upload_date(s['upload_date'])}\n"
+                    f"Timestamp Link: [{s['title']} @ {s['timestamp_str']}]({s['url']})\n"
+                    f"Transcript Excerpt: {s['snippet']}"
+                )
+            context_text = "\n\n---\n\n".join(context_blocks)
+            evidence_section = (
+                f"Relevant excerpts from Abhijit Chavda's past video transcripts:\n"
+                f"{context_text}\n\n"
+            )
+        else:
+            evidence_section = "(No specific video transcripts were retrieved for this query. Answer hypothetically based on Abhijit Chavda's known philosophies, historical framework, and worldview.)\n\n"
+
+        system_prompt = (
+            "You are Abhijit AI, answering hypothetically in the authentic voice, persona, intellectual style, and worldview of Abhijit Chavda (historian, geopolitical analyst, theoretical physicist, and host of #AskAbhijit).\n"
+            "Persona, Tone & Mannerisms:\n"
+            "1. Conversational, articulate, confident, analytical, and intellectually unapologetic.\n"
+            "2. Greeting & Addressing the Questioner:\n"
+            "   - Be intelligent, context-aware, and natural when opening your response.\n"
+            "   - Do NOT blindly start every answer with 'Namaskar'.\n"
+            "   - Mirror or appropriately reciprocate the questioner's greeting (e.g., if greeted with 'Hello', 'Hi', 'Good morning/evening', 'Pranam', etc., respond in kind or acknowledge accordingly; use 'Namaskar' when greeted with 'Namaskar' or as an appropriate traditional greeting).\n"
+            "   - If the questioner introduces themselves or provides their name (e.g., 'Hi Abhijit, Amit here'), address them by name warmly (e.g., 'Hello Amit', 'Namaskar Amit').\n"
+            "   - If the questioner jumps straight into the question without a greeting, you may dive directly into the analysis (e.g., 'Interesting question...', 'Look, the reality is...', 'To understand this from first principles...') without forcing an unnecessary greeting.\n"
+            "3. Characteristic Phrases & Style:\n"
+            "   - Naturally weave in his characteristic phrases where suitable:\n"
+            "     * 'Interesting question...'\n"
+            "     * 'Look, the reality is...'\n"
+            "     * 'From first principles...'\n"
+            "     * 'I have already answered this in one of my videos, but to summarize...'\n"
+            "     * 'Namaskar' (when appropriate as a traditional or reciprocal greeting)\n"
+            "4. Ground your perspective in Indian history, civilizational continuity, realpolitik/geopolitics, and scientific rigor.\n"
+            "5. When relevant transcripts are provided above, reference them organically (e.g. 'I already answered this in my video [Title @ MM:SS](url), but to summarize...').\n"
+            "6. If not directly covered in transcripts, reason from first principles and articulate how Abhijit would hypothetically assess the situation.\n"
+            "7. Always stay in character as Abhijit."
+        )
+        user_content = f"{evidence_section}User Question: {question}"
+        return system_prompt, user_content, sources
+
     else:  # evolution
         # Sort retrieved chunks strictly ascending by upload_date, then start_sec, capped at 12
         sorted_chunks = sorted(
@@ -284,13 +360,35 @@ def build_prompt_and_sources(
 async def prepare_rag_context(
     question: str,
     playlist_id: str | None = None,
-    mode: Literal["auto", "lookup", "opinion", "evolution"] = "auto",
+    mode: Literal["auto", "lookup", "opinion", "evolution", "freeform", "abhijit_ai"] = "auto",
     provider: str = "openai",
     chat_key: str = "",
     embed_key: str = "",
 ) -> tuple[QueryMode, str, str, list[dict[str, Any]]]:
     """Concurrently resolve query mode and embedding, then retrieve context chunks."""
     t0 = time.perf_counter()
+
+    if mode == "freeform":
+        system_prompt, user_content, sources = build_prompt_and_sources(question, [], "freeform")
+        return "freeform", system_prompt, user_content, sources
+
+    if mode == "abhijit_ai":
+        raw_chunks: list[dict[str, Any]] = []
+        if embed_key:
+            try:
+                query_emb = await get_query_embedding(question, embed_key=embed_key)
+                raw_chunks = await asyncio.to_thread(
+                    db.hybrid_search,
+                    query_embedding=query_emb,
+                    query_text=question,
+                    playlist_id=playlist_id,
+                    limit=6,
+                )
+            except Exception as e:
+                logger.warning("Abhijit AI: transcript search skipped (%s).", e)
+                raw_chunks = []
+        system_prompt, user_content, sources = build_prompt_and_sources(question, raw_chunks, "abhijit_ai")
+        return "abhijit_ai", system_prompt, user_content, sources
 
     # Step 1: Concurrently run classification (if auto) and query embedding
     if mode == "auto":
@@ -305,6 +403,21 @@ async def prepare_rag_context(
         "Mode resolved to '%s' and embedding generated in %.2fs",
         chosen_mode, time.perf_counter() - t0,
     )
+
+    if chosen_mode == "freeform":
+        system_prompt, user_content, sources = build_prompt_and_sources(question, [], "freeform")
+        return "freeform", system_prompt, user_content, sources
+
+    if chosen_mode == "abhijit_ai":
+        raw_chunks = await asyncio.to_thread(
+            db.hybrid_search,
+            query_embedding=query_emb,
+            query_text=question,
+            playlist_id=playlist_id,
+            limit=6,
+        )
+        system_prompt, user_content, sources = build_prompt_and_sources(question, raw_chunks, "abhijit_ai")
+        return "abhijit_ai", system_prompt, user_content, sources
 
     # Step 2: Hybrid search with mode-tuned limits (fewer chunks = faster prompt processing)
     limit = 6 if chosen_mode == "lookup" else (16 if chosen_mode == "opinion" else 20)
@@ -476,10 +589,90 @@ async def run_evolution_pipeline(
     }
 
 
+async def run_freeform_pipeline(
+    question: str,
+    provider: str = "openai",
+    chat_key: str = "",
+) -> dict[str, Any]:
+    """Freeform mode: answer any user question without transcript constraints."""
+    logger.info("Running FREEFORM pipeline: question=%r", question[:80])
+    t0 = time.perf_counter()
+
+    system_prompt, user_content, sources = build_prompt_and_sources(question, [], "freeform")
+    client, model = get_chat_client_and_model(provider, chat_key)
+    logger.debug("Freeform: calling LLM (model=%s) for answer.", model)
+    completion = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.7,
+        max_tokens=1500,
+    )
+    answer = completion.choices[0].message.content or ""
+    logger.info("Freeform pipeline complete: %.2fs elapsed.", time.perf_counter() - t0)
+
+    return {
+        "answer": answer,
+        "mode": "freeform",
+        "sources": [],
+    }
+
+
+async def run_abhijit_ai_pipeline(
+    question: str,
+    playlist_id: str | None = None,
+    provider: str = "openai",
+    chat_key: str = "",
+    embed_key: str = "",
+    precomputed_emb: list[float] | None = None,
+) -> dict[str, Any]:
+    """Abhijit AI persona mode: answers in Abhijit Chavda's voice and worldview, citing videos if available."""
+    logger.info("Running ABHIJIT_AI pipeline: question=%r", question[:80])
+    t0 = time.perf_counter()
+
+    raw_chunks: list[dict[str, Any]] = []
+    if embed_key:
+        try:
+            query_emb = precomputed_emb if precomputed_emb is not None else await get_query_embedding(question, embed_key=embed_key)
+            raw_chunks = await asyncio.to_thread(
+                db.hybrid_search,
+                query_embedding=query_emb,
+                query_text=question,
+                playlist_id=playlist_id,
+                limit=6,
+            )
+        except Exception as e:
+            logger.warning("Abhijit AI: transcript search failed or skipped (%s), proceeding with persona answer.", e)
+            raw_chunks = []
+
+    system_prompt, user_content, sources = build_prompt_and_sources(question, raw_chunks, "abhijit_ai")
+    client, model = get_chat_client_and_model(provider, chat_key)
+    logger.debug("Abhijit AI: calling LLM (model=%s).", model)
+    completion = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.6,
+        max_tokens=1000,
+    )
+    answer = completion.choices[0].message.content or ""
+    logger.info("Abhijit AI pipeline complete: %d source(s), %.2fs elapsed.", len(sources), time.perf_counter() - t0)
+
+    return {
+        "answer": answer,
+        "mode": "abhijit_ai",
+        "sources": sources,
+    }
+
+
 async def query_rag_stream(
     question: str,
     playlist_id: str | None = None,
-    mode: Literal["auto", "lookup", "opinion", "evolution"] = "auto",
+    mode: Literal["auto", "lookup", "opinion", "evolution", "freeform", "abhijit_ai"] = "auto",
     provider: str = "openai",
     chat_key: str = "",
     embed_key: str = "",
@@ -502,7 +695,7 @@ async def query_rag_stream(
         "sources": sources,
     }
 
-    if not sources:
+    if not sources and chosen_mode not in ("freeform", "abhijit_ai"):
         yield {
             "type": "delta",
             "text": "No relevant transcript chunks found for this query in the indexed videos.",
@@ -511,8 +704,15 @@ async def query_rag_stream(
         return
 
     client, model = get_chat_client_and_model(provider, chat_key)
-    max_tokens = 600 if chosen_mode == "lookup" else (800 if chosen_mode == "opinion" else 900)
-    temp = 0.2 if chosen_mode == "lookup" else 0.3
+    if chosen_mode == "freeform":
+        max_tokens = 1500
+        temp = 0.7
+    elif chosen_mode == "abhijit_ai":
+        max_tokens = 1000
+        temp = 0.6
+    else:
+        max_tokens = 600 if chosen_mode == "lookup" else (800 if chosen_mode == "opinion" else 900)
+        temp = 0.2 if chosen_mode == "lookup" else 0.3
 
     logger.debug("Streaming response started (mode=%s, model=%s)...", chosen_mode, model)
     stream = await client.chat.completions.create(
@@ -543,12 +743,21 @@ async def query_rag_stream(
 async def query_rag(
     question: str,
     playlist_id: str | None = None,
-    mode: Literal["auto", "lookup", "opinion", "evolution"] = "auto",
+    mode: Literal["auto", "lookup", "opinion", "evolution", "freeform", "abhijit_ai"] = "auto",
     provider: str = "openai",
     chat_key: str = "",
     embed_key: str = "",
 ) -> dict[str, Any]:
     """Unified entry point for multi-mode RAG queries (non-streaming)."""
+    if mode == "freeform":
+        return await run_freeform_pipeline(
+            question, provider=provider, chat_key=chat_key,
+        )
+    if mode == "abhijit_ai":
+        return await run_abhijit_ai_pipeline(
+            question, playlist_id=playlist_id, provider=provider, chat_key=chat_key, embed_key=embed_key,
+        )
+
     # Concurrently resolve mode and embedding if mode is "auto"
     if mode == "auto":
         classify_task = asyncio.create_task(classify_query(question, provider=provider, chat_key=chat_key))
@@ -558,7 +767,15 @@ async def query_rag(
         chosen_mode = mode
         query_emb = await get_query_embedding(question, embed_key=embed_key)
 
-    if chosen_mode == "lookup":
+    if chosen_mode == "freeform":
+        return await run_freeform_pipeline(
+            question, provider=provider, chat_key=chat_key,
+        )
+    elif chosen_mode == "abhijit_ai":
+        return await run_abhijit_ai_pipeline(
+            question, playlist_id=playlist_id, provider=provider, chat_key=chat_key, embed_key=embed_key, precomputed_emb=query_emb,
+        )
+    elif chosen_mode == "lookup":
         return await run_lookup_pipeline(
             question, playlist_id=playlist_id, provider=provider, chat_key=chat_key, embed_key=embed_key, precomputed_emb=query_emb,
         )
