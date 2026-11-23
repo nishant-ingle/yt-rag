@@ -45,6 +45,8 @@ class TestAbhijitAIMode(unittest.TestCase):
         self.assertIn("Abhijit AI", sys_prompt)
         self.assertIn("Namaskar", sys_prompt)
         self.assertIn("Interesting question", sys_prompt)
+        self.assertIn("Do NOT repeatedly start answers with 'Interesting question'", sys_prompt)
+        self.assertIn("Emulate those authentic transcript opening styles", sys_prompt)
         self.assertIn("I have already answered this in one of my videos", sys_prompt)
         self.assertIn("Do NOT blindly start every answer with 'Namaskar'", sys_prompt)
         self.assertIn("Mirror or appropriately reciprocate", sys_prompt)
@@ -54,6 +56,36 @@ class TestAbhijitAIMode(unittest.TestCase):
         self.assertEqual(len(sources), 1)
         self.assertEqual(sources[0]["video_id"], "test_vid_1")
         self.assertEqual(sources[0]["timestamp_str"], "02:00")
+
+    def test_dynamic_starting_lines_across_all_modes(self):
+        dummy_chunk = {
+            "video_id": "vid1",
+            "title": "History of India",
+            "upload_date": "20230501",
+            "start_sec": 60,
+            "end_sec": 120,
+            "text": "The Mauryan Empire established centralized administration.",
+        }
+
+        # Lookup mode
+        lookup_prompt, _, _ = rag.build_prompt_and_sources("Who ruled Maurya?", [dummy_chunk], "lookup")
+        self.assertIn("Avoid rigid, hard-coded boilerplate openings", lookup_prompt)
+        self.assertIn("starting lines like the ones used in the transcripts", lookup_prompt)
+
+        # Opinion mode
+        opinion_prompt, _, _ = rag.build_prompt_and_sources("What is his opinion?", [dummy_chunk], "opinion")
+        self.assertIn("Avoid repetitive, hard-coded boilerplate", opinion_prompt)
+        self.assertIn("authentic starting lines like those found in the transcripts", opinion_prompt)
+
+        # Evolution mode
+        evolution_prompt, _, _ = rag.build_prompt_and_sources("How did views evolve?", [dummy_chunk], "evolution")
+        self.assertIn("Avoid formulaic, hard-coded opening lines", evolution_prompt)
+        self.assertIn("mirror the historical progression in the transcripts", evolution_prompt)
+
+        # Freeform mode
+        freeform_prompt, _, _ = rag.build_prompt_and_sources("Explain calculus", [], "freeform")
+        self.assertIn("Avoid canned, hard-coded AI opening lines", freeform_prompt)
+        self.assertIn("open naturally and dynamically", freeform_prompt)
 
     def test_build_prompt_and_sources_abhijit_ai_without_chunks(self):
         sys_prompt, user_content, sources = rag.build_prompt_and_sources(
