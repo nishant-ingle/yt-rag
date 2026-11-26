@@ -50,31 +50,44 @@ That's it! The script automatically:
 
 ## Running with Docker
 
-You can also build and run `yt-rag` as a standalone container with zero local Python or Node.js dependencies installed:
+You can run `yt-rag` as a standalone container with zero local Python or Node.js dependencies installed—either by pulling the pre-built image from [Docker Hub](https://hub.docker.com/r/nishantingle/yt-rag) or building it locally.
 
-### 1. Build the Docker Image
+### Option A: Pull Pre-built Image (Recommended)
+
+Run directly using the official image on [Docker Hub](https://hub.docker.com/r/nishantingle/yt-rag):
+
+```bash
+docker run -p 8000:8000 --env-file .env nishantingle/yt-rag:latest
+
+```
+
+*(Or pass the API key directly without a `.env` file: `docker run -p 8000:8000 -e LLM_API_KEY=sk-... nishantingle/yt-rag:latest`)*
+
+### Option B: Build from Source
+
+If you want to build the image locally from your own changes:
+
 ```bash
 docker build -t yt-rag .
-```
-
-### 2. Run the Container
-```bash
 docker run -p 8000:8000 --env-file .env yt-rag
+
 ```
-*(Or pass the API key directly: `docker run -p 8000:8000 -e LLM_API_KEY=sk-... yt-rag`)*
 
 Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 > [!TIP]
 > **Persistent Data & Read-Write Mode**:
-> By default, the container includes the pre-indexed database (`data/rag.db`) in read-only snapshot mode (`READ_ONLY_MODE=true`). To persist newly synced playlists or enable full write access, mount the `data` directory and set `READ_ONLY_MODE=false`:
+> By default, the container includes the pre-indexed database (`data/rag.db`) in read-only snapshot mode (`READ_ONLY_MODE=true`). To persist newly synced playlists or enable full write access, mount the `data` directory and set `READ_ONLY_MODE=false` (replace `nishantingle/yt-rag:latest` with `yt-rag` if built locally):
 > ```bash
 > docker run -p 8000:8000 \
 >   -v $(pwd)/data:/app/data \
 >   -e READ_ONLY_MODE=false \
 >   --env-file .env \
->   yt-rag
+>   nishantingle/yt-rag:latest
+> 
 > ```
+> 
+> 
 
 ---
 
