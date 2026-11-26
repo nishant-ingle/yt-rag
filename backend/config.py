@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Any
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -75,6 +75,25 @@ class Settings(BaseSettings):
 
     PLAYLISTS: list[dict[str, Any]] = Field(default_factory=lambda: list(DEFAULT_PLAYLISTS))
     CHAT_PROVIDERS: dict[str, dict[str, str]] = Field(default_factory=lambda: dict(CHAT_PROVIDERS))
+
+    @field_validator(
+        "LLM_BASE_URL",
+        "LLM_API_KEY",
+        "CHAT_MODEL",
+        "EMBED_BASE_URL",
+        "EMBED_API_KEY",
+        "EMBED_MODEL",
+        "ADMIN_TOKEN",
+        mode="before",
+    )
+    @classmethod
+    def _strip_quotes_and_whitespace(cls, v: Any) -> Any:
+        """Strip whitespace and matching surrounding quotes (e.g. from Docker --env-file)."""
+        if isinstance(v, str):
+            v = v.strip()
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+                v = v[1:-1].strip()
+        return v
 
 
 settings = Settings()
