@@ -4,9 +4,8 @@
 
 A high-performance, embedded Retrieval-Augmented Generation (RAG) system designed to index YouTube playlists, extract timestamped transcripts, and answer nuanced questions with exact timestamp deep links, overall opinion synthesis, and longitudinal opinion evolution over time.
 
-## yt-rag Opinion Synthesis UI
+[!yt-rag Opinion Synthesis UI](<img width="1228" height="720" alt="demo" src="https://github.com/user-attachments/assets/8455b64a-bae9-4421-9b76-0ae034268329" />)
 
-https://github.com/user-attachments/assets/5c20e20f-cdf3-480d-896d-11e9f1a172c7
 
 
 
