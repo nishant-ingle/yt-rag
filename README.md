@@ -1,5 +1,7 @@
 # yt-rag: YouTube Playlist RAG & Opinion Synthesis Engine
 
+> **Looking for a fully local setup?** If you don't want to use OpenAI APIs and have a local Llama setup, check out the [`local_llama`](https://github.com/nishant-ingle/yt-rag/tree/local_llama) branch.
+
 A high-performance, embedded Retrieval-Augmented Generation (RAG) system designed to index YouTube playlists, extract timestamped transcripts, and answer nuanced questions with exact timestamp deep links, overall opinion synthesis, and longitudinal opinion evolution over time.
 
 ![yt-rag Opinion Synthesis UI](<images/opinion on string theory.png>)
@@ -163,6 +165,24 @@ python -m backend.batch_sync --batch 28 --once
 # Or run continuously on a recurring schedule (e.g., every 4 hours)
 python -m backend.batch_sync --batch 28 --interval-hours 4
 ```
+
+> [!NOTE]
+> **Discrepancy Between Total and Indexed Video Counts**:
+> You may notice that the total number of videos in a playlist (e.g., in sync logs) is higher than the `Indexed` count in the UI. This happens because some YouTube videos **do not have English transcripts or captions available** (e.g., captions disabled by the creator, livestreams, or non-English audio without auto-subtitles). `yt-rag` flags these as `status: 'no_transcript'` so they aren't repeatedly re-queried, while the UI only shows videos that have searchable transcript chunks and vector embeddings.
+
+---
+
+## Handling YouTube Rate Limits (HTTP 429 Workaround)
+
+YouTube monitors automated transcript requests (`/api/timedtext`) and temporarily rate-limits unauthenticated IP addresses after approximately ~28 videos per day.
+
+### Mobile Hotspot Reset Workaround
+Because the rate limit is enforced strictly against your **public IP address**, you can bypass the block immediately without waiting 24 hours:
+
+1. Connect your computer to your phone's **Personal Hotspot**.
+2. On your phone, toggle **Airplane Mode ON**, wait 5 seconds, and toggle it **OFF**.
+3. Your mobile carrier immediately assigns a **brand-new public IP address**.
+4. In the `yt-rag` web UI, click **"Clear Rate Limit"** (or restart the server) and resume syncing another batch!
 
 ---
 

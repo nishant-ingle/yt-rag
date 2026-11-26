@@ -128,7 +128,11 @@ def check_playlist_updates(playlist_ids: list[str] | None = None) -> list[dict[s
 def fetch_video_details_and_transcript(video_id: str) -> dict[str, Any] | None:
     """Fetch video metadata via yt-dlp and transcript segments via youtube-transcript-api."""
     logger.info("Fetching metadata and transcript for video: %s", video_id)
-    opts = {"quiet": True, "skip_download": True, "no_warnings": True}
+    opts = {
+        "quiet": True,
+        "skip_download": True,
+        "no_warnings": True
+    }
     rate_limited = False
     with yt_dlp.YoutubeDL(opts) as ydl:
         try:

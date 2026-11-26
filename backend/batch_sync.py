@@ -64,7 +64,9 @@ async def main():
     parser.add_argument("--batch", type=int, default=28, help="Batch size of videos per playlist (default: 28)")
     parser.add_argument("--interval-hours", type=float, default=4.0, help="Interval between batches in hours (default: 4.0)")
     parser.add_argument("--once", action="store_true", help="Run a single batch and exit")
+
     args = parser.parse_args()
+
 
     if args.once:
         await run_batch(args.batch)

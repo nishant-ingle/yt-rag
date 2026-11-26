@@ -8,7 +8,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_PLAYLISTS: list[dict[str, Any]] = [
     {
         "id": "ask-abhijit",
-        "name": "#AskAbhijit",
+        "name": "#AskAbhijit Show",
         "url": "https://www.youtube.com/playlist?list=PLSw9nXpYo3m6Bb_MVBgd0jRE3U4hJvZkd",
     },
     {
@@ -16,11 +16,38 @@ DEFAULT_PLAYLISTS: list[dict[str, Any]] = [
         "name": "Abhijit Chavda Podcast",
         "url": "https://www.youtube.com/playlist?list=PLSw9nXpYo3m7CUa1yvPZmxYCLkchGa9-e",
     },
+
+    {
+        "id": "geopolitical-videos",
+        "name": "Geopolitical Videos",
+        "url": "https://youtube.com/playlist?list=PLSw9nXpYo3m5B0oy2aMBlmWZGvb35Vv7T&si=3zR_ldctm_meWdVK",
+    },
+    {
+        "id": "geostrategy-with-abhijit-chavda-podcast",
+        "name": "Geostrategy with Abhijit Chavda",
+        "url": "https://youtube.com/playlist?list=PLSw9nXpYo3m5gO6wo-CwCFQe7hos3MC_B&si=ymhbxEzN4Op-xI85",
+    },
+    {
+        "id": "the-indian-interest-podcast",
+        "name": "The #IndianInterest Podcast",
+        "url": "https://youtube.com/playlist?list=PLSw9nXpYo3m6nR38Csp5Ea61pnLdRxdn-&si=yUkpeF83-vJHBELf",
+    },
+    {
+        "id": "understanding-america-w-abhijit-chavda",
+        "name": "Understanding America w/ Abhijit Chavda",
+        "url": "https://youtube.com/playlist?list=PLSw9nXpYo3m432nSt6uOp9rWYlwCtcBVq&si=uqqbzRCExd1LoqWU",
+    },
+
+    {
+        "id": "collaborations",
+        "name": "Collaborations",
+        "url": "https://youtube.com/playlist?list=PLSw9nXpYo3m7AJ1XdjXwAxsuWUf7hL3dR&si=nG1eumfIeJJ465ll",
+    }
 ]
 
 CHAT_PROVIDERS: dict[str, dict[str, str]] = {
     "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
-    "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "model": "gemini-2.5-flash"},
+    "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "model": "gemini-3.8-flash"},
     "claude": {"base_url": "https://api.anthropic.com/v1/", "model": "claude-sonnet-4-6"},
 }
 
