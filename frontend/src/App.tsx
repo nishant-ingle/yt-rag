@@ -14,17 +14,13 @@ import {
   AlertCircle,
   AlertTriangle,
   X,
-  Key,
   Lock,
-  Eye,
-  EyeOff,
   MessageSquare,
   Bot,
   Terminal,
   Cpu,
   Radio,
   CornerDownLeft,
-  ShieldCheck,
   Zap,
   Database,
 } from 'lucide-react';
@@ -52,14 +48,9 @@ function formatUploadDate(dateStr?: string): string {
 }
 
 export default function App() {
-  const [appConfig, setAppConfig] = useState<AppConfig>({ read_only_mode: false, has_server_key: false });
-  const [provider, setProvider] = useState<'openai' | 'gemini' | 'claude'>(() => {
-    return (sessionStorage.getItem('byok_provider') as any) || 'openai';
-  });
-  const [apiKey, setApiKey] = useState<string>(() => {
-    return sessionStorage.getItem('byok_key') || '';
-  });
-  const [showKey, setShowKey] = useState<boolean>(false);
+  const [appConfig, setAppConfig] = useState<AppConfig>({ read_only_mode: false, has_server_key: true });
+  const provider = 'ollama';
+  const apiKey = 'ollama';
 
   const [playlists, setPlaylists] = useState<PlaylistStat[]>([]);
   const [selectedPlaylist, setSelectedPlaylist] = useState<string>('all');
@@ -87,19 +78,6 @@ export default function App() {
   } | null>(null);
   const [batchSize, setBatchSize] = useState<number | 'all'>(28);
   const [showSources, setShowSources] = useState(true);
-
-  // Persist BYOK credentials in sessionStorage
-  useEffect(() => {
-    sessionStorage.setItem('byok_provider', provider);
-  }, [provider]);
-
-  useEffect(() => {
-    if (apiKey) {
-      sessionStorage.setItem('byok_key', apiKey);
-    } else {
-      sessionStorage.removeItem('byok_key');
-    }
-  }, [apiKey]);
 
   // Load config, playlists and sync status on mount
   useEffect(() => {
@@ -359,49 +337,32 @@ export default function App() {
           </div>
         </div>
 
-        {/* BYOK / Provider Card */}
+        {/* Local Ollama Configuration Card */}
         <div className="p-3.5 border-b border-zinc-800/80 bg-zinc-950/30 space-y-2.5">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
-              <Key className="w-3 h-3 text-red-500" />
-              LLM Provider (BYOK)
+              <Bot className="w-3 h-3 text-red-500" />
+              Local Model (Ollama)
             </label>
-            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
-              SESSION KEY
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+              ONLINE
             </span>
           </div>
 
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value as any)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 font-mono transition"
-          >
-            <option value="openai">OpenAI (gpt-4o-mini)</option>
-            <option value="gemini" disabled>Google Gemini (gemini-3.8-flash)</option>
-            <option value="claude" disabled>Anthropic Claude (claude-sonnet)</option>
-          </select>
-
-          <div className="relative">
-            <input
-              type={showKey ? 'text' : 'password'}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={appConfig.has_server_key && !apiKey ? 'Using server default key' : 'API Key (sk-... / AIza...)'}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-2.5 pr-8 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 font-mono transition"
-            />
-            <button
-              type="button"
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-2 top-2 text-zinc-400 hover:text-red-400 transition"
-              title={showKey ? 'Hide key' : 'Show key'}
-            >
-              {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            </button>
+          <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800 space-y-1.5 text-xs font-mono">
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-400 text-[11px]">Chat LLM:</span>
+              <span className="text-zinc-200 text-[11px]">llama3.2:3b</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-400 text-[11px]">Embeddings:</span>
+              <span className="text-zinc-200 text-[11px]">nomic-embed-text</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-400 text-[11px]">Endpoint:</span>
+              <span className="text-zinc-400 text-[10px]">http://localhost:11434</span>
+            </div>
           </div>
-          <p className="text-[9px] font-mono text-zinc-500 leading-tight flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
-            Stored in browser session memory // zero server logs
-          </p>
         </div>
 
         {/* Sync Controls */}

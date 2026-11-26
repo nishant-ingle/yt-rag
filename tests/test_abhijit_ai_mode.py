@@ -119,7 +119,7 @@ class TestAbhijitAIMode(unittest.TestCase):
         mock_response.choices = [mock_choice]
 
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-        mock_get_client.return_value = (mock_client, "gpt-4o-mini")
+        mock_get_client.return_value = (mock_client, "llama3.2:3b")
 
         import asyncio
         result = asyncio.run(rag.run_abhijit_ai_pipeline(
@@ -155,7 +155,7 @@ class TestAbhijitAIMode(unittest.TestCase):
         mock_response.choices = [mock_choice]
 
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-        mock_get_client.return_value = (mock_client, "gpt-4o-mini")
+        mock_get_client.return_value = (mock_client, "llama3.2:3b")
 
         import asyncio
         result = asyncio.run(rag.run_abhijit_ai_pipeline(
@@ -172,7 +172,7 @@ class TestAbhijitAIMode(unittest.TestCase):
     @patch("backend.rag.get_chat_client_and_model")
     @patch("backend.rag.get_query_embedding")
     def test_api_chat_endpoint_abhijit_ai_success(self, mock_embed, mock_get_client):
-        mock_embed.return_value = [0.0] * 1536
+        mock_embed.return_value = [0.0] * 768
         mock_client = MagicMock()
         mock_choice = MagicMock()
         mock_choice.message.content = "Namaskar! That is a very interesting question. First principles dictate that..."
@@ -180,7 +180,7 @@ class TestAbhijitAIMode(unittest.TestCase):
         mock_response.choices = [mock_choice]
 
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-        mock_get_client.return_value = (mock_client, "gpt-4o-mini")
+        mock_get_client.return_value = (mock_client, "llama3.2:3b")
 
         # Abhijit AI should work with just X-Api-Key without throwing 401 for missing embed_key
         res = self.client.post(

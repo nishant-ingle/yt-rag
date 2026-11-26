@@ -264,7 +264,7 @@ async def embed_chunks(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
 
-    embed_key = settings.EMBED_API_KEY or settings.LLM_API_KEY
+    embed_key = settings.EMBED_API_KEY or settings.LLM_API_KEY or "ollama"
     client = AsyncOpenAI(base_url=settings.EMBED_BASE_URL, api_key=embed_key)
     embeddings: list[list[float]] = []
     batch_size = 64

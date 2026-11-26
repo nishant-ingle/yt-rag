@@ -34,7 +34,7 @@ class TestFreeformMode(unittest.TestCase):
         mock_response.choices = [mock_choice]
 
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-        mock_get_client.return_value = (mock_client, "gpt-4o-mini")
+        mock_get_client.return_value = (mock_client, "llama3.2:3b")
 
         import asyncio
         result = asyncio.run(rag.run_freeform_pipeline("Explain thermodynamics", chat_key="test-key"))
@@ -66,7 +66,7 @@ class TestFreeformMode(unittest.TestCase):
         mock_response.choices = [mock_choice]
 
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-        mock_get_client.return_value = (mock_client, "gpt-4o-mini")
+        mock_get_client.return_value = (mock_client, "llama3.2:3b")
 
         # Freeform mode should work with just X-Api-Key, no EMBED_API_KEY needed
         res = self.client.post(

@@ -58,7 +58,7 @@ def build_source_dict(chunk: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def classify_query(question: str, provider: str = "openai", chat_key: str = "") -> QueryMode:
+async def classify_query(question: str, provider: str = "ollama", chat_key: str = "") -> QueryMode:
     """Classify user question into lookup, opinion, or evolution."""
     q_lower = question.lower()
 
@@ -175,17 +175,20 @@ async def classify_query(question: str, provider: str = "openai", chat_key: str 
         return "lookup"
 
 
-def get_chat_client_and_model(provider: str = "openai", chat_key: str = "") -> tuple[AsyncOpenAI, str]:
-    """Return AsyncOpenAI client and model for the selected provider."""
-    prov_cfg = settings.CHAT_PROVIDERS.get(provider) or settings.CHAT_PROVIDERS["openai"]
-    key = chat_key or settings.LLM_API_KEY
+def get_chat_client_and_model(provider: str = "ollama", chat_key: str = "") -> tuple[AsyncOpenAI, str]:
+    """Return AsyncOpenAI client and model for local Ollama llama3.2:3b."""
+    prov_cfg = settings.CHAT_PROVIDERS.get(provider) or settings.CHAT_PROVIDERS.get("ollama") or {
+        "base_url": settings.LLM_BASE_URL,
+        "model": settings.CHAT_MODEL,
+    }
+    key = chat_key or settings.LLM_API_KEY or "ollama"
     client = AsyncOpenAI(base_url=prov_cfg["base_url"], api_key=key)
-    return client, prov_cfg["model"]
+    return client, prov_cfg.get("model", settings.CHAT_MODEL)
 
 
 def get_embed_client(embed_key: str = "") -> AsyncOpenAI:
-    """Return AsyncOpenAI client configured for embedding models."""
-    key = embed_key or settings.EMBED_API_KEY or settings.LLM_API_KEY
+    """Return AsyncOpenAI client configured for open-source embedding models on local Ollama."""
+    key = embed_key or settings.EMBED_API_KEY or settings.LLM_API_KEY or "ollama"
     return AsyncOpenAI(base_url=settings.EMBED_BASE_URL, api_key=key)
 
 
@@ -375,7 +378,7 @@ async def prepare_rag_context(
     question: str,
     playlist_id: str | None = None,
     mode: Literal["auto", "lookup", "opinion", "evolution", "freeform", "abhijit_ai"] = "auto",
-    provider: str = "openai",
+    provider: str = "ollama",
     chat_key: str = "",
     embed_key: str = "",
 ) -> tuple[QueryMode, str, str, list[dict[str, Any]]]:
@@ -453,7 +456,7 @@ async def prepare_rag_context(
 async def run_lookup_pipeline(
     question: str,
     playlist_id: str | None = None,
-    provider: str = "openai",
+    provider: str = "ollama",
     chat_key: str = "",
     embed_key: str = "",
     precomputed_emb: list[float] | None = None,
@@ -504,7 +507,7 @@ async def run_lookup_pipeline(
 async def run_opinion_pipeline(
     question: str,
     playlist_id: str | None = None,
-    provider: str = "openai",
+    provider: str = "ollama",
     chat_key: str = "",
     embed_key: str = "",
     precomputed_emb: list[float] | None = None,
@@ -555,7 +558,7 @@ async def run_opinion_pipeline(
 async def run_evolution_pipeline(
     question: str,
     playlist_id: str | None = None,
-    provider: str = "openai",
+    provider: str = "ollama",
     chat_key: str = "",
     embed_key: str = "",
     precomputed_emb: list[float] | None = None,
@@ -605,7 +608,7 @@ async def run_evolution_pipeline(
 
 async def run_freeform_pipeline(
     question: str,
-    provider: str = "openai",
+    provider: str = "ollama",
     chat_key: str = "",
 ) -> dict[str, Any]:
     """Freeform mode: answer any user question without transcript constraints."""
@@ -637,7 +640,7 @@ async def run_freeform_pipeline(
 async def run_abhijit_ai_pipeline(
     question: str,
     playlist_id: str | None = None,
-    provider: str = "openai",
+    provider: str = "ollama",
     chat_key: str = "",
     embed_key: str = "",
     precomputed_emb: list[float] | None = None,
@@ -687,7 +690,7 @@ async def query_rag_stream(
     question: str,
     playlist_id: str | None = None,
     mode: Literal["auto", "lookup", "opinion", "evolution", "freeform", "abhijit_ai"] = "auto",
-    provider: str = "openai",
+    provider: str = "ollama",
     chat_key: str = "",
     embed_key: str = "",
 ) -> AsyncGenerator[dict[str, Any], None]:
@@ -758,7 +761,7 @@ async def query_rag(
     question: str,
     playlist_id: str | None = None,
     mode: Literal["auto", "lookup", "opinion", "evolution", "freeform", "abhijit_ai"] = "auto",
-    provider: str = "openai",
+    provider: str = "ollama",
     chat_key: str = "",
     embed_key: str = "",
 ) -> dict[str, Any]:

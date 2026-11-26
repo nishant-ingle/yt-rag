@@ -82,11 +82,14 @@ def health_check():
 
 @app.get("/api/config")
 def get_config():
-    """Expose read-only mode and server key availability."""
+    """Expose read-only mode and local Ollama model availability."""
     logger.debug("Config requested: read_only=%s, has_server_key=%s", settings.READ_ONLY_MODE, bool(settings.LLM_API_KEY))
     return {
         "read_only_mode": settings.READ_ONLY_MODE,
-        "has_server_key": bool(settings.LLM_API_KEY),
+        "has_server_key": True,
+        "provider": "ollama",
+        "chat_model": settings.CHAT_MODEL,
+        "embed_model": settings.EMBED_MODEL,
     }
 
 
@@ -179,35 +182,17 @@ async def sync_playlists_endpoint(
 @app.post("/api/chat")
 async def chat_endpoint(
     req: ChatRequest,
-    x_provider: str | None = Header(default="openai"),
+    x_provider: str | None = Header(default="ollama"),
     x_api_key: str | None = Header(default=None),
 ):
     """Multi-mode RAG query endpoint returning synthesized answer and timestamped sources."""
-    provider = (x_provider or "openai").lower().strip()
+    provider = (x_provider or "ollama").lower().strip()
     if provider not in settings.CHAT_PROVIDERS:
-        logger.warning("Unknown provider '%s' requested, falling back to 'openai'.", provider)
-        provider = "openai"
+        provider = "ollama"
 
     request_api_key = (x_api_key or "").strip()
-    # Ignore stale 'ollama' key cached from local_llama branch if provider is not ollama
-    if request_api_key == "ollama" and provider != "ollama":
-        request_api_key = ""
-    chat_key = request_api_key or settings.LLM_API_KEY
-    if not chat_key:
-        logger.warning("Chat request rejected: no API key provided.")
-        raise HTTPException(
-            status_code=401,
-            detail="Enter an API key in the sidebar to ask questions",
-        )
-
-    # Resolve embedding key: server EMBED_API_KEY -> LLM_API_KEY -> user's OpenAI key if using openai
-    embed_key = settings.EMBED_API_KEY or settings.LLM_API_KEY or (request_api_key if provider == "openai" else "")
-    if not embed_key and req.mode not in ("freeform", "abhijit_ai"):
-        logger.warning("Chat request rejected: no embedding key available (provider=%s).", provider)
-        raise HTTPException(
-            status_code=401,
-            detail="No OpenAI embedding key configured on server. Please provide an OpenAI API key or configure EMBED_API_KEY.",
-        )
+    chat_key = request_api_key or settings.LLM_API_KEY or "ollama"
+    embed_key = settings.EMBED_API_KEY or settings.LLM_API_KEY or request_api_key or "ollama"
 
     logger.info(
         "Chat request: mode=%s, provider=%s, playlist_id=%s, stream=%s, question=%r",

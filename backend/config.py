@@ -46,9 +46,7 @@ DEFAULT_PLAYLISTS: list[dict[str, Any]] = [
 ]
 
 CHAT_PROVIDERS: dict[str, dict[str, str]] = {
-    "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
-    "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "model": "gemini-3.8-flash"},
-    "claude": {"base_url": "https://api.anthropic.com/v1/", "model": "claude-sonnet-4-6"},
+    "ollama": {"base_url": "http://localhost:11434/v1", "model": "llama3.2:3b"},
 }
 
 
@@ -59,14 +57,14 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    LLM_BASE_URL: str = Field(default="https://api.openai.com/v1")
-    LLM_API_KEY: str = Field(default="")
-    CHAT_MODEL: str = Field(default="gpt-4o-mini")
+    LLM_BASE_URL: str = Field(default="http://localhost:11434/v1")
+    LLM_API_KEY: str = Field(default="ollama")
+    CHAT_MODEL: str = Field(default="llama3.2:3b")
 
-    EMBED_BASE_URL: str = Field(default="https://api.openai.com/v1")
-    EMBED_API_KEY: str = Field(default="")
-    EMBED_MODEL: str = Field(default="text-embedding-3-small")
-    EMBED_DIM: int = Field(default=1536)
+    EMBED_BASE_URL: str = Field(default="http://localhost:11434/v1")
+    EMBED_API_KEY: str = Field(default="ollama")
+    EMBED_MODEL: str = Field(default="nomic-embed-text")
+    EMBED_DIM: int = Field(default=768)
 
     READ_ONLY_MODE: bool = Field(default=False)
     ADMIN_TOKEN: str = Field(default="")

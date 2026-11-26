@@ -308,34 +308,38 @@ def hybrid_search(
     with get_db_context(db_path) as conn:
         # 1. Vector Search
         if query_embedding is not None:
-            emb_blob = sqlite_vec.serialize_float32(query_embedding)
-            vec_cursor = conn.execute(
-                """
-                SELECT DISTINCT c.chunk_id, vc.distance
-                FROM vec_chunks vc
-                JOIN chunks c ON c.chunk_id = vc.chunk_id
-                JOIN videos v ON v.video_id = c.video_id
-                LEFT JOIN playlist_videos pv ON pv.video_id = v.video_id
-                WHERE vc.embedding MATCH ? AND k = ?
-                  AND (? IS NULL OR pv.playlist_id = ?)
-                  AND (? IS NULL OR v.upload_date >= ?)
-                  AND (? IS NULL OR v.upload_date <= ?)
-                ORDER BY vc.distance ASC
-                LIMIT ?
-                """,
-                (
-                    emb_blob,
-                    k_candidates,
-                    playlist_id,
-                    playlist_id,
-                    date_from,
-                    date_from,
-                    date_to,
-                    date_to,
-                    k_candidates,
-                ),
-            )
-            vec_results = [(row[0], float(row[1])) for row in vec_cursor.fetchall()]
+            try:
+                emb_blob = sqlite_vec.serialize_float32(query_embedding)
+                vec_cursor = conn.execute(
+                    """
+                    SELECT DISTINCT c.chunk_id, vc.distance
+                    FROM vec_chunks vc
+                    JOIN chunks c ON c.chunk_id = vc.chunk_id
+                    JOIN videos v ON v.video_id = c.video_id
+                    LEFT JOIN playlist_videos pv ON pv.video_id = v.video_id
+                    WHERE vc.embedding MATCH ? AND k = ?
+                      AND (? IS NULL OR pv.playlist_id = ?)
+                      AND (? IS NULL OR v.upload_date >= ?)
+                      AND (? IS NULL OR v.upload_date <= ?)
+                    ORDER BY vc.distance ASC
+                    LIMIT ?
+                    """,
+                    (
+                        emb_blob,
+                        k_candidates,
+                        playlist_id,
+                        playlist_id,
+                        date_from,
+                        date_from,
+                        date_to,
+                        date_to,
+                        k_candidates,
+                    ),
+                )
+                vec_results = [(row[0], float(row[1])) for row in vec_cursor.fetchall()]
+            except Exception as e:
+                logger.warning("Vector search failed (%s), relying on FTS5 BM25 search.", e)
+                vec_results = []
 
         # 2. FTS5 BM25 Search
         clean_fts_query = sanitize_fts_query(query_text or "")

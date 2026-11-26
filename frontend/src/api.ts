@@ -138,8 +138,8 @@ export async function sendChatMessageStream(
   question: string,
   playlistId: string | null = null,
   mode: 'auto' | 'lookup' | 'opinion' | 'evolution' | 'freeform' | 'abhijit_ai' = 'auto',
-  provider: string = 'openai',
-  apiKey: string = '',
+  provider: string = 'ollama',
+  apiKey: string = 'ollama',
   onEvent?: (event: ChatStreamEvent) => void,
 ): Promise<void> {
   const headers: Record<string, string> = {
@@ -201,8 +201,8 @@ export async function sendChatMessage(
   question: string,
   playlistId: string | null = null,
   mode: 'auto' | 'lookup' | 'opinion' | 'evolution' | 'freeform' | 'abhijit_ai' = 'auto',
-  provider: string = 'openai',
-  apiKey: string = '',
+  provider: string = 'ollama',
+  apiKey: string = 'ollama',
 ): Promise<ChatResponse> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

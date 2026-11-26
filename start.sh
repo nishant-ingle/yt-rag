@@ -5,7 +5,7 @@ export OPENSSL_CONF=/dev/null
 # Copy .env from .env.example if missing
 if [ ! -f .env ]; then
   cp .env.example .env
-  echo "Created .env from .env.example — add your LLM_API_KEY or Ollama config."
+  echo "Created .env from .env.example (pre-configured for local Ollama llama3.2:3b)."
 fi
 
 # Set up virtual environment if not present

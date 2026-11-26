@@ -1,8 +1,6 @@
-# yt-rag: YouTube Playlist RAG & Opinion Synthesis Engine
+# yt-rag: Local YouTube Playlist RAG & Opinion Synthesis Engine
 
-> **Looking for a fully local setup?** If you don't want to use OpenAI APIs and have a local Llama setup, check out the [`local_llama`](https://github.com/nishant-ingle/yt-rag/tree/local_llama) branch.
-
-A high-performance, embedded Retrieval-Augmented Generation (RAG) system designed to index YouTube playlists, extract timestamped transcripts, and answer nuanced questions with exact timestamp deep links, overall opinion synthesis, and longitudinal opinion evolution over time.
+A high-performance, 100% local Retrieval-Augmented Generation (RAG) system powered by **Ollama** (`llama3.2:3b` + `nomic-embed-text`), designed to index YouTube playlists, extract timestamped transcripts, and answer nuanced questions with exact timestamp deep links, overall opinion synthesis, and longitudinal opinion evolution over time.
 
 ## yt-rag Opinion Synthesis UI
 <video src="images/video.mp4" style="/*display: block; */margin: auto; width: 60rem; max-width: 100%; height: auto;" autoplay loop muted playsinline></video>
@@ -23,18 +21,33 @@ Focused initially on **Abhijit Chavda**'s channel ([@AbhijitChavda](https://www.
 ### Prerequisites
 - Python 3.11+
 - Node.js 20+
+- [Ollama](https://ollama.com/) installed and running locally
+
+### Pull Required Models in Ollama
+```bash
+ollama pull llama3.2:3b
+ollama pull nomic-embed-text
+```
 
 ### Configuration
-Configure your API keys and models in `.env`:
+Copy `.env.example` to `.env` (pre-configured for local Ollama):
 ```env
-# Cloud OpenAI configuration (default)
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=sk-your-openai-api-key
-CHAT_MODEL=gpt-4o-mini
-EMBED_MODEL=text-embedding-3-small
-EMBED_DIM=1536
+# Local Ollama configuration (Default for local_llama branch)
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_API_KEY=ollama
+CHAT_MODEL=llama3.2:3b
+
+EMBED_BASE_URL=http://localhost:11434/v1
+EMBED_API_KEY=ollama
+EMBED_MODEL=nomic-embed-text
+EMBED_DIM=768
 ```
-*(Note: End users can also optionally provide their own OPENAI API key per session for chat queries via the BYOK card in the web UI sidebar).*
+
+### (Optional) Re-embed Existing Chunks
+If `data/rag.db` currently contains embeddings from a different dimension model (e.g., 1536-dim), re-embed all chunks with `nomic-embed-text` (768-dim):
+```bash
+.venv/bin/python scripts/reembed.py
+```
 
 ### Launch
 ```bash
@@ -45,36 +58,6 @@ That's it! The script automatically:
 - Sets up the Python virtual environment and installs dependencies
 - Builds the React frontend UI
 - Starts the server at [http://localhost:8000](http://localhost:8000)
-
----
-
-## Running with Docker
-
-You can also build and run `yt-rag` as a standalone container with zero local Python or Node.js dependencies installed:
-
-### 1. Build the Docker Image
-```bash
-docker build -t yt-rag .
-```
-
-### 2. Run the Container
-```bash
-docker run -p 8000:8000 --env-file .env yt-rag
-```
-*(Or pass the API key directly: `docker run -p 8000:8000 -e LLM_API_KEY=sk-... yt-rag`)*
-
-Open [http://localhost:8000](http://localhost:8000) in your browser.
-
-> [!TIP]
-> **Persistent Data & Read-Write Mode**:
-> By default, the container includes the pre-indexed database (`data/rag.db`) in read-only snapshot mode (`READ_ONLY_MODE=true`). To persist newly synced playlists or enable full write access, mount the `data` directory and set `READ_ONLY_MODE=false`:
-> ```bash
-> docker run -p 8000:8000 \
->   -v $(pwd)/data:/app/data \
->   -e READ_ONLY_MODE=false \
->   --env-file .env \
->   yt-rag
-> ```
 
 ---
 
@@ -91,9 +74,10 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
    - No temporary `.srt` files on disk.
    - Allows instant offline re-indexing or re-chunking without hitting YouTube API rate limits.
 
-3. **Multi-Provider BYOK & Local LLMs**:
-   - Built-in multi-provider support: OpenAI (`gpt-4o-mini`), Google Gemini (`gemini-3.8-flash`), Anthropic Claude (`claude-sonnet-4-6`), or local Ollama.
-   - BYOK (Bring Your Own Key) sidebar configuration stored securely in session storage.
+3. **100% Local Inference via Ollama**:
+   - Chat and synthesis: `llama3.2:3b` via Ollama's OpenAI-compatible endpoint (`http://localhost:11434/v1`).
+   - Semantic embeddings: `nomic-embed-text` (768-dim) generating embeddings locally.
+   - No external API keys or cloud tokens required.
 
 4. **Multi-Mode RAG & Real-Time Streaming**:
    - **Abhijit AI Mode**: 1st-person POV synthesis reflecting Abhijit Chavda's voice, convictions, and speaking style.
@@ -138,8 +122,7 @@ yt-rag/
 │   ├── test_abhijit_ai_mode.py
 │   ├── test_freeform_mode.py
 │   └── test_sync_rate_limit.py
-├── .env.example             # Template for OpenAI and Ollama configurations
-├── Dockerfile               # Production multi-stage container
+├── .env.example             # Template for local Ollama configuration
 ├── render.yaml              # Render deployment configuration
 ├── start.sh                 # One-command setup & launch script
 ├── README.md                # Project documentation and guide
