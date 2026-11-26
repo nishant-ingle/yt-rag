@@ -7,8 +7,43 @@ A high-performance, embedded Retrieval-Augmented Generation (RAG) system designe
 ![yt-rag Opinion Synthesis UI](<images/opinion on string theory.png>)
 
 Focused initially on **Abhijit Chavda**'s channel ([@AbhijitChavda](https://www.youtube.com/@AbhijitChavda)) with playlists:
-- **#AskAbhijit**: `https://youtube.com/playlist?list=PLSw9nXpYo3m6Bb_MVBgd0jRE3U4hJvZkd`
-- **Abhijit Chavda Podcast**: `https://youtube.com/playlist?list=PLSw9nXpYo3m7CUa1yvPZmxYCLkchGa9-e`
+- **#AskAbhijit Show**: [YouTube Playlist](https://www.youtube.com/playlist?list=PLSw9nXpYo3m6Bb_MVBgd0jRE3U4hJvZkd)
+- **Abhijit Chavda Podcast**: [YouTube Playlist](https://www.youtube.com/playlist?list=PLSw9nXpYo3m7CUa1yvPZmxYCLkchGa9-e)
+- **Geopolitical Videos**: [YouTube Playlist](https://www.youtube.com/playlist?list=PLSw9nXpYo3m5B0oy2aMBlmWZGvb35Vv7T)
+- **Geostrategy with Abhijit Chavda**: [YouTube Playlist](https://www.youtube.com/playlist?list=PLSw9nXpYo3m5gO6wo-CwCFQe7hos3MC_B)
+- **The #IndianInterest Podcast**: [YouTube Playlist](https://www.youtube.com/playlist?list=PLSw9nXpYo3m6nR38Csp5Ea61pnLdRxdn-)
+- **Understanding America w/ Abhijit Chavda**: [YouTube Playlist](https://www.youtube.com/playlist?list=PLSw9nXpYo3m432nSt6uOp9rWYlwCtcBVq)
+- **Collaborations**: [YouTube Playlist](https://www.youtube.com/playlist?list=PLSw9nXpYo3m7AJ1XdjXwAxsuWUf7hL3dR)
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Python 3.11+
+- Node.js 20+
+
+### Configuration
+Configure your API keys and models in `.env`:
+```env
+# Cloud OpenAI configuration (default)
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=sk-your-openai-api-key
+CHAT_MODEL=gpt-4o-mini
+EMBED_MODEL=text-embedding-3-small
+EMBED_DIM=1536
+```
+*(Note: End users can also optionally provide their own OPENAI API key per session for chat queries via the BYOK card in the web UI sidebar).*
+
+### Launch
+```bash
+./start.sh
+```
+That's it! The script automatically:
+- Creates `.env` from `.env.example` (if missing)
+- Sets up the Python virtual environment and installs dependencies
+- Builds the React frontend UI
+- Starts the server at [http://localhost:8000](http://localhost:8000)
 
 ---
 
@@ -26,17 +61,20 @@ Focused initially on **Abhijit Chavda**'s channel ([@AbhijitChavda](https://www.
    - Allows instant offline re-indexing or re-chunking without hitting YouTube API rate limits.
 
 3. **Multi-Provider BYOK & Local LLMs**:
-   - Built-in multi-provider support: OpenAI (`gpt-4o-mini`), Google Gemini (`gemini-2.5-flash`), Anthropic Claude (`claude-sonnet-4-6`), or local Ollama.
+   - Built-in multi-provider support: OpenAI (`gpt-4o-mini`), Google Gemini (`gemini-3.8-flash`), Anthropic Claude (`claude-sonnet-4-6`), or local Ollama.
    - BYOK (Bring Your Own Key) sidebar configuration stored securely in session storage.
 
 4. **Multi-Mode RAG & Real-Time Streaming**:
+   - **Abhijit AI Mode**: 1st-person POV synthesis reflecting Abhijit Chavda's voice, convictions, and speaking style.
    - **Timestamp Lookup**: Finds specific quotes and facts with clickable `https://youtu.be/{video_id}?t={start_sec}` deep links.
    - **Overall Opinion Synthesis**: Synthesizes the creator's view across distinct videos (capped at 2 chunks per video).
    - **Opinion Evolution Over Time**: Sorts matching chunks chronologically by `upload_date` to contrast early versus recent stances.
+   - **Freeform Mode**: Direct knowledge-based answers without persona prompting.
    - **Token Streaming (SSE)**: Streams tokens in real time (< 500ms TTFT) with live citations.
 
 5. **Rate-Limit Resilience & Background Batch Sync**:
-   - Polite request spacing (2.5s pacing) and automatic handling of YouTube HTTP 429 rate limits.
+   - Polite request spacing and automatic handling of YouTube HTTP 429 rate limits.
+   - Videos with unavailable transcripts are flagged (`no_transcript`) to prevent repeated sync failures.
    - Automated scheduled batch sync script (`backend/batch_sync.py`) for syncing large playlists over time.
 
 ---
@@ -63,7 +101,11 @@ yt-rag/
 │   └── src/
 │       ├── App.tsx          # React UI with streaming & citations drawer
 │       └── api.ts           # Frontend API client
+├── scripts/
+│   └── reembed.py           # Utility to re-embed all chunks with a new model
 ├── tests/
+│   ├── test_abhijit_ai_mode.py
+│   ├── test_freeform_mode.py
 │   └── test_sync_rate_limit.py
 ├── .env.example             # Template for OpenAI and Ollama configurations
 ├── Dockerfile               # Production multi-stage container
@@ -86,72 +128,10 @@ yt-rag/
 ### Core Database Methods (`backend/db.py`)
 - `init_db()`: Initializes tables, virtual tables, indexes, and triggers.
 - `get_known_video_ids(playlist_id=None)`: Fetches set of existing video IDs to enable fast incremental sync.
+- `link_playlist_video(playlist_id, video_id)`: Associates an existing video with a new playlist without re-downloading or re-embedding.
 - `upsert_video_and_chunks(video_data, chunks, embeddings, playlist_id)`: Atomically commits video metadata, chunks, and vector embeddings in a single SQLite transaction.
 - `get_playlist_stats()`: Retrieves counts of indexed, missing transcript, and total videos per playlist.
 - `hybrid_search(query_embedding, query_text, playlist_id, date_from, date_to, limit)`: Runs vector search and FTS5 BM25 search in parallel, fusing results with Reciprocal Rank Fusion (RRF).
-
----
-
-## Quick Start
-
-### 1. Prerequisites
-- Python 3.11+
-- Node.js 20+
-
-### 2. One-Command Launch (Recommended)
-Run the automated launch script, which configures `.env`, sets up the Python virtual environment, installs backend dependencies, builds the frontend UI, and launches the server:
-```bash
-./start.sh
-```
-Then open [http://localhost:8000](http://localhost:8000) in your browser.
-
----
-
-### Manual Setup (Alternative)
-
-#### 1. Setup Virtual Environment & Install Dependencies
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-```
-
-#### 2. Configure Environment
-Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-Edit `.env` to configure your API key or Ollama endpoint:
-```env
-# Cloud OpenAI configuration (default)
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=sk-your-openai-api-key
-CHAT_MODEL=gpt-4o-mini
-EMBED_MODEL=text-embedding-3-small
-EMBED_DIM=1536
-
-# Local Ollama alternative:
-# LLM_BASE_URL=http://localhost:11434/v1
-# LLM_API_KEY=ollama
-# CHAT_MODEL=llama3.1:8b
-# EMBED_MODEL=nomic-embed-text
-# EMBED_DIM=768
-```
-
-*(Note: You can also use BYOK in the web UI sidebar to provide OpenAI, Gemini, or Claude API keys per session without setting server keys).*
-
-#### 3. Build Frontend
-```bash
-cd frontend
-npm install
-npm run build
-cd ..
-```
-
-#### 4. Run Server
-```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
-```
 
 ---
 
@@ -190,5 +170,6 @@ Because the rate limit is enforced strictly against your **public IP address**, 
 
 Run the test suite with:
 ```bash
+source .venv/bin/activate
 python -m unittest discover tests
 ```
