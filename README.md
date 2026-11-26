@@ -5,7 +5,10 @@
 A high-performance, embedded Retrieval-Augmented Generation (RAG) system designed to index YouTube playlists, extract timestamped transcripts, and answer nuanced questions with exact timestamp deep links, overall opinion synthesis, and longitudinal opinion evolution over time.
 
 ## yt-rag Opinion Synthesis UI
-<video src="images/video.mp4" style="/*display: block; */margin: auto; width: 60rem; max-width: 100%; height: auto;" autoplay loop muted playsinline></video>
+
+https://github.com/user-attachments/assets/5c20e20f-cdf3-480d-896d-11e9f1a172c7
+
+
 
 Focused initially on **Abhijit Chavda**'s channel ([@AbhijitChavda](https://www.youtube.com/@AbhijitChavda)) with playlists:
 - **#AskAbhijit Show**: [YouTube Playlist](https://www.youtube.com/playlist?list=PLSw9nXpYo3m6Bb_MVBgd0jRE3U4hJvZkd)
