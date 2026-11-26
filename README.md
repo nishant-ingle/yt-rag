@@ -6,6 +6,14 @@ A high-performance, embedded Retrieval-Augmented Generation (RAG) system designe
 
 [Live Demo](https://yt-rag-yqci.onrender.com)
 
+### Query Modes
+The engine supports multiple specialized modes to answer questions from different angles:
+- **Abhijit AI Mode**: 1st-person POV synthesis reflecting Abhijit Chavda's voice, convictions, and intellectual style, directly citing past video transcripts.
+- **Timestamp Lookup**: Finds specific quotes, direct answers, and facts with clickable timestamp deep links (`https://youtu.be/{video_id}?t={start_sec}`).
+- **Overall Opinion Synthesis**: Synthesizes the speaker's core thesis and nuanced stance across multiple distinct videos.
+- **Opinion Evolution Over Time**: Chronologically groups transcript evidence by upload date to contrast early versus recent perspectives.
+- **Freeform Mode**: General AI assistant mode to discuss any topic without video transcript constraints.
+
 ![yt-rag Opinion Synthesis UI](https://github.com/user-attachments/assets/8455b64a-bae9-4421-9b76-0ae034268329)
 
 
