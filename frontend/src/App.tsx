@@ -20,6 +20,13 @@ import {
   EyeOff,
   MessageSquare,
   Bot,
+  Terminal,
+  Cpu,
+  Radio,
+  CornerDownLeft,
+  ShieldCheck,
+  Zap,
+  Database,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -34,6 +41,15 @@ import {
   SyncEvent,
   AppConfig,
 } from './api';
+
+function formatUploadDate(dateStr?: string): string {
+  if (!dateStr || dateStr === 'N/A') return 'N/A';
+  const clean = dateStr.trim();
+  if (/^\d{8}$/.test(clean)) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(6, 8)}`;
+  }
+  return clean;
+}
 
 export default function App() {
   const [appConfig, setAppConfig] = useState<AppConfig>({ read_only_mode: false, has_server_key: false });
@@ -150,7 +166,7 @@ export default function App() {
       setSyncing(true);
       let encounteredRateLimit = false;
       const effectiveLimit = limit !== undefined ? limit : (batchSize === 'all' ? undefined : batchSize);
-      setSyncProgress({ current: 0, total: 1, message: 'Starting synchronization...', status: 'processing' });
+      setSyncProgress({ current: 0, total: 1, message: 'Initiating neural ingest pipeline...', status: 'processing' });
       await syncPlaylistsStream(playlistIds, effectiveLimit, (event: SyncEvent) => {
         if (event.status === 'rate_limited') {
           encounteredRateLimit = true;
@@ -165,7 +181,7 @@ export default function App() {
           setSyncProgress({
             current: event.current || 0,
             total: event.total || 1,
-            message: `⚠️ Rate limit exceeded: ${msg}`,
+            message: `⚠️ [ERR_429] Rate limit throttled: ${msg}`,
             status: 'rate_limited',
           });
           return;
@@ -191,7 +207,6 @@ export default function App() {
           }));
         }
       });
-      // Refresh counts after sync
       await loadPlaylists(false);
       if (!encounteredRateLimit) {
         setRateLimitInfo(null);
@@ -199,7 +214,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message?.includes('429') || err.message?.toLowerCase().includes('rate limit')) {
         setRateLimitInfo({
-          message: `Sync not possible: ${err.message}`,
+          message: `Sync throttled: ${err.message}`,
           timestamp: new Date().toLocaleTimeString(),
         });
       } else {
@@ -251,94 +266,149 @@ export default function App() {
         },
       );
     } catch (err: any) {
-      setChatError(err.message || 'Error executing query');
+      setChatError(err.message || 'Neural synthesis error');
     } finally {
       setLoadingChat(false);
     }
   }
 
-  const modeLabels: Record<string, { label: string; desc: string; icon: any }> = {
-    abhijit_ai: { label: 'Abhijit AI', desc: 'How Abhijit would hypothetically answer (#AskAbhijit)', icon: Bot },
-    lookup: { label: 'Find Timestamp', desc: 'Direct quotes & exact moments', icon: Search },
-    opinion: { label: 'Overall Opinion', desc: 'Synthesize consistent thesis', icon: Layers },
-    evolution: { label: 'Opinion Over Time', desc: 'Chronological stance analysis', icon: History },
-    freeform: { label: 'Freeform', desc: '#AskAbhijit Episode 9000', icon: MessageSquare },
+  const modeLabels: Record<string, { label: string; desc: string; icon: any; color: string; badge: string }> = {
+    abhijit_ai: {
+      label: 'Abhijit AI',
+      desc: "Synthesize response in Abhijit Chavda's voice & convictions (#AskAbhijit)",
+      icon: Bot,
+      color: 'text-red-400 border-red-500/50 bg-red-950/30',
+      badge: 'border-red-500/50 text-red-400 bg-red-950/40',
+    },
+    lookup: {
+      label: 'Find Timestamp',
+      desc: 'Locate exact quotes & video moments with clickable timestamps',
+      icon: Search,
+      color: 'text-white border-zinc-700 bg-zinc-800',
+      badge: 'border-zinc-700 text-zinc-200 bg-zinc-900',
+    },
+    opinion: {
+      label: 'Overall Opinion',
+      desc: 'Synthesize consistent viewpoint across distinct videos',
+      icon: Layers,
+      color: 'text-zinc-200 border-zinc-700 bg-zinc-800',
+      badge: 'border-zinc-700 text-zinc-200 bg-zinc-900',
+    },
+    evolution: {
+      label: 'Opinion Over Time',
+      desc: 'Chronological stance analysis and perspective evolution',
+      icon: History,
+      color: 'text-amber-400 border-amber-500/40 bg-amber-950/30',
+      badge: 'border-amber-500/50 text-amber-400 bg-amber-950/40',
+    },
+    freeform: {
+      label: 'Freeform',
+      desc: 'Open conversational answer without video constraints (#AskAbhijit 9000)',
+      icon: MessageSquare,
+      color: 'text-zinc-200 border-zinc-700 bg-zinc-800',
+      badge: 'border-zinc-700 text-zinc-200 bg-zinc-900',
+    },
   };
 
+  const totalIndexedVideos = playlists.reduce((acc, p) => acc + (p.indexed_count || 0), 0);
+
   return (
-    <div className="flex h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
-      {/* LEFT SIDEBAR: Playlist Sync Manager */}
-      <aside className="w-80 md:w-96 border-r border-slate-800 bg-slate-900/60 flex flex-col shrink-0">
-        <div className="p-4 border-b border-slate-800">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-red-600/20 text-red-500 flex items-center justify-center font-bold text-lg border border-red-500/30">
-                ▶
+    <div className="flex h-screen w-screen bg-black text-zinc-100 overflow-hidden font-sans selection:bg-red-950 selection:text-red-200">
+      {/* LEFT SIDEBAR: Telemetry & Ingestion Matrix */}
+      <aside className="w-80 md:w-[370px] border-r border-zinc-800/80 bg-[#09090b] flex flex-col shrink-0 relative z-20">
+        {/* Top Header / Branding */}
+        <div className="p-4 border-b border-zinc-800/80 bg-zinc-950/60">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2.5">
+              <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-red-600/10 border border-red-500/30 shadow-[0_0_12px_rgba(255,0,51,0.2)]">
+                <Cpu className="w-4 h-4 text-red-500" />
+                <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-black animate-ping" />
               </div>
               <div>
-                <h1 className="font-semibold text-base tracking-tight text-white">yt-rag engine</h1>
-                <p className="text-xs text-slate-400">Abhijit Chavda Channel</p>
+                <div className="flex items-center gap-1.5">
+                  <h1 className="font-tech text-base tracking-widest text-white font-bold">
+                    yt-rag
+                  </h1>
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 uppercase tracking-tight">
+                    RAG Engine
+                  </span>
+                </div>
+                <p className="text-[10px] font-mono text-zinc-400 tracking-wider">
+                  Abhijit Chavda Archive
+                </p>
               </div>
             </div>
-            {appConfig.read_only_mode && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-950/80 text-blue-400 border border-blue-800/60 shrink-0">
-                Read-Only
+
+            {/* Read-Only or Online Badge */}
+            {appConfig.read_only_mode ? (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-900 text-zinc-400 border border-zinc-800 shadow-sm shrink-0 flex items-center gap-1">
+                <Lock className="w-2.5 h-2.5" />
+                READ-ONLY
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-500/40 flex items-center gap-1 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                READY
               </span>
             )}
           </div>
-          {appConfig.read_only_mode && (
-            <p className="text-[10px] text-blue-400/90 mt-1 font-medium">Hosted Snapshot (Read-Only)</p>
-          )}
+
+          <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-1 border-t border-zinc-800/50">
+            <span>INDEXED: <strong className="text-white">{totalIndexedVideos}</strong> VIDEOS</span>
+            <span>PLAYLISTS: <strong className="text-zinc-200">{playlists.length}</strong></span>
+          </div>
         </div>
 
-        {/* BYOK Configuration Card */}
-        <div className="p-3.5 border-b border-slate-800 bg-slate-900/40 space-y-2">
+        {/* BYOK / Provider Card */}
+        <div className="p-3.5 border-b border-zinc-800/80 bg-zinc-950/30 space-y-2.5">
           <div className="flex items-center justify-between">
-            <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5">
-              <Key className="w-3.5 h-3.5 text-red-400" />
-              LLM Provider
+            <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+              <Key className="w-3 h-3 text-red-500" />
+              LLM Provider (BYOK)
             </label>
-            <span className="text-[10px] text-slate-500 font-mono">BYOK</span>
+            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
+              SESSION KEY
+            </span>
           </div>
 
           <select
             value={provider}
             onChange={(e) => setProvider(e.target.value as any)}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500 font-medium"
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 font-mono transition"
           >
             <option value="openai">OpenAI (gpt-4o-mini)</option>
-            <option value="gemini" disabled className="text-slate-500">Gemini (Coming Soon)</option>
-            <option value="claude" disabled className="text-slate-500">Claude (Coming Soon)</option>
+            <option value="gemini" disabled>Google Gemini (gemini-3.8-flash)</option>
+            <option value="claude" disabled>Anthropic Claude (claude-sonnet)</option>
           </select>
 
           <div className="relative">
             <input
               type={showKey ? 'text' : 'password'}
               value={apiKey}
-              required
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={appConfig.has_server_key && !apiKey ? 'OpenAI Key (Server key active)' : 'OpenAI API Key (sk-...)'}
-              className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-2.5 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500 font-mono"
+              placeholder={appConfig.has_server_key && !apiKey ? 'Using server default key' : 'API Key (sk-... / AIza...)'}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-2.5 pr-8 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 font-mono transition"
             />
             <button
               type="button"
               onClick={() => setShowKey(!showKey)}
-              className="absolute right-2 top-2 text-slate-400 hover:text-slate-200 transition"
-              title={showKey ? 'Hide Key' : 'Show Key'}
+              className="absolute right-2 top-2 text-zinc-400 hover:text-red-400 transition"
+              title={showKey ? 'Hide key' : 'Show key'}
             >
               {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
           </div>
-          <p className="text-[10px] text-slate-500 leading-tight">
-            Key kept in session memory; never saved to disk or DB.
+          <p className="text-[9px] font-mono text-zinc-500 leading-tight flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+            Stored in browser session memory // zero server logs
           </p>
         </div>
 
-        {/* Action Controls */}
-        <div className="p-4 border-b border-slate-800 space-y-2.5">
+        {/* Sync Controls */}
+        <div className="p-4 border-b border-zinc-800/80 space-y-3">
           {appConfig.read_only_mode ? (
-            <div className="p-2.5 rounded-lg bg-blue-950/40 border border-blue-800/50 text-blue-300 text-xs flex items-center gap-2">
-              <Lock className="w-4 h-4 text-blue-400 shrink-0" />
+            <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800 text-zinc-400 text-xs flex items-center gap-2 font-mono">
+              <Lock className="w-4 h-4 text-zinc-400 shrink-0" />
               <span className="text-[11px] leading-tight">
                 Hosted Snapshot: Playlist sync is read-only.
               </span>
@@ -349,29 +419,29 @@ export default function App() {
                 <button
                   onClick={() => loadPlaylists(true)}
                   disabled={checkingRemote || syncing}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition disabled:opacity-50"
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-mono font-medium rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 hover:border-zinc-700 transition disabled:opacity-50 shadow-sm"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${checkingRemote ? 'animate-spin' : ''}`} />
-                  {checkingRemote ? 'Checking...' : 'Check for New'}
+                  <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${checkingRemote ? 'animate-spin' : ''}`} />
+                  {checkingRemote ? 'CHECKING...' : 'CHECK FOR NEW'}
                 </button>
                 <button
                   onClick={() => handleSync()}
                   disabled={syncing || checkingRemote}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-red-600 hover:bg-red-500 text-white transition disabled:opacity-50 shadow-sm shadow-red-900/50"
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-mono font-medium rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold transition disabled:opacity-50 shadow-[0_0_15px_rgba(255,0,51,0.25)] hover:shadow-[0_0_20px_rgba(255,0,51,0.4)]"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-                  {syncing ? 'Syncing...' : batchSize === 'all' ? 'Sync All New' : `Sync Next ${batchSize}`}
+                  <Zap className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'SYNCING...' : batchSize === 'all' ? 'SYNC ALL' : `SYNC NEXT ${batchSize}`}
                 </button>
               </div>
 
               {/* Batch Size Selector */}
-              <div className="flex items-center justify-between text-xs bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800">
-                <span className="text-slate-400 font-medium text-[11px]">Batch Limit:</span>
+              <div className="flex items-center justify-between text-xs bg-zinc-900/80 px-2.5 py-1.5 rounded-lg border border-zinc-800 font-mono">
+                <span className="text-zinc-400 text-[10px] tracking-wider uppercase">BATCH LIMIT:</span>
                 <select
                   value={batchSize}
                   onChange={(e) => setBatchSize(e.target.value === 'all' ? 'all' : Number(e.target.value))}
                   disabled={syncing}
-                  className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500 font-medium"
+                  className="bg-zinc-900 border border-zinc-800 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-red-500 font-mono"
                 >
                   <option value={10}>10 videos</option>
                   <option value={28}>28 videos (Safe)</option>
@@ -382,44 +452,41 @@ export default function App() {
 
               {/* Rate Limit Alert Banner in Sidebar */}
               {rateLimitInfo && (
-                <div className="p-3.5 rounded-xl bg-amber-950/60 border border-amber-600/60 text-amber-200 shadow-lg space-y-2.5">
+                <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.2)] space-y-2.5 font-mono">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
-                        <AlertTriangle className="w-4 h-4 text-amber-400" />
+                      <div className="p-1 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 shrink-0">
+                        <AlertTriangle className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-semibold text-amber-200 tracking-tight flex items-center gap-1.5">
-                          Rate Limit Exceeded
-                          <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-amber-900/80 text-amber-300 border border-amber-700/60">
-                            429
-                          </span>
+                        <h4 className="text-xs font-bold text-amber-300 tracking-tight flex items-center gap-1.5 font-tech">
+                          [HTTP 429: RATE LIMITED]
                         </h4>
-                        <p className="text-[10px] text-amber-400/80">Sync paused to protect IP address</p>
+                        <p className="text-[10px] text-amber-400/80 font-sans">Sync paused to protect IP address</p>
                       </div>
                     </div>
                     <button
                       onClick={handleDismissRateLimit}
                       className="text-amber-400/70 hover:text-amber-200 p-1 rounded hover:bg-amber-900/50 transition shrink-0"
-                      title="Dismiss warning"
+                      title="Dismiss"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
-                  <div className="p-2.5 rounded-lg bg-slate-950/70 border border-amber-900/60 text-xs text-amber-100/95 leading-relaxed font-mono text-[11px] break-words">
+                  <div className="p-2.5 rounded-lg bg-black border border-amber-900/60 text-[10px] text-amber-200/90 leading-relaxed font-mono break-words">
                     {rateLimitInfo.message}
                     {rateLimitInfo.playlist && (
-                      <div className="mt-1 text-[10px] text-amber-400/90 font-sans">
-                        Playlist: <span className="text-amber-200 font-medium">{rateLimitInfo.playlist}</span>
+                      <div className="mt-1 text-[10px] text-red-400 font-mono">
+                        PLAYLIST: {rateLimitInfo.playlist}
                       </div>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-amber-300/80 pt-1 border-t border-amber-900/50">
-                    <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                  <div className="flex items-center justify-between text-[10px] text-amber-300/80 pt-1 border-t border-amber-900/50">
+                    <span className="flex items-center gap-1 text-[9px] text-zinc-400">
                       <Clock className="w-3 h-3 text-amber-400 shrink-0" />
-                      {rateLimitInfo.timestamp ? `Detected at ${rateLimitInfo.timestamp}` : 'Wait a while before retry'}
+                      {rateLimitInfo.timestamp ? `@ ${rateLimitInfo.timestamp}` : 'Cooldown active'}
                     </span>
                     <button
                       onClick={() => {
@@ -427,44 +494,46 @@ export default function App() {
                         handleSync(rateLimitInfo.playlistId ? [rateLimitInfo.playlistId] : undefined);
                       }}
                       disabled={syncing}
-                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 transition disabled:opacity-50"
+                      className="px-2.5 py-1 rounded text-[10px] font-mono font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition disabled:opacity-50"
                     >
-                      Retry Sync
+                      RETRY SYNC
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Sync Progress Bar */}
+              {/* Sync Progress Indicator */}
               {syncProgress && (
-                <div className={`mt-3 p-3 rounded-lg border ${
+                <div className={`p-3 rounded-lg border font-mono ${
                   syncProgress.status === 'rate_limited'
-                    ? 'bg-amber-950/50 border-amber-600/70'
-                    : 'bg-slate-950/80 border-slate-800'
+                    ? 'bg-amber-950/40 border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+                    : 'bg-zinc-900 border-zinc-800'
                 }`}>
-                  <div className="flex justify-between text-xs text-slate-400 mb-1.5">
-                    <span className={syncProgress.status === 'rate_limited' ? 'text-amber-400 font-medium flex items-center gap-1' : ''}>
-                      {syncProgress.status === 'rate_limited' && <AlertTriangle className="w-3 h-3 text-amber-400" />}
-                      {syncProgress.status === 'rate_limited' ? 'Rate Limit Paused' : 'Ingestion Progress'}
+                  <div className="flex justify-between text-[11px] mb-1.5">
+                    <span className={`flex items-center gap-1 font-semibold ${
+                      syncProgress.status === 'rate_limited' ? 'text-amber-400' : 'text-zinc-200'
+                    }`}>
+                      <Radio className="w-3 h-3 text-red-500 animate-pulse" />
+                      {syncProgress.status === 'rate_limited' ? 'RATE LIMIT PAUSED' : 'SYNC IN PROGRESS'}
                     </span>
-                    <span className="font-mono text-slate-300">
+                    <span className="text-zinc-300 font-bold">
                       {syncProgress.current} / {syncProgress.total}
                     </span>
                   </div>
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-full bg-black rounded-full h-1.5 overflow-hidden border border-zinc-800">
                     <div
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        syncProgress.status === 'rate_limited' ? 'bg-amber-500' : 'bg-red-500'
+                      className={`h-full transition-all duration-300 ${
+                        syncProgress.status === 'rate_limited'
+                          ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]'
+                          : 'bg-gradient-to-r from-red-600 to-red-500 shadow-[0_0_8px_rgba(255,0,51,0.6)]'
                       }`}
                       style={{
                         width: `${syncProgress.total ? (syncProgress.current / syncProgress.total) * 100 : 5}%`,
                       }}
                     />
                   </div>
-                  <p className={`text-xs mt-2 truncate font-mono ${
-                    syncProgress.status === 'rate_limited' ? 'text-amber-300' : 'text-slate-400'
-                  }`}>
-                    {syncProgress.message}
+                  <p className="text-[10px] mt-2 truncate text-zinc-400">
+                    &gt; {syncProgress.message}
                   </p>
                 </div>
               )}
@@ -472,29 +541,33 @@ export default function App() {
           )}
         </div>
 
-        {/* Playlists List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-1">
-            Tracked Playlists ({playlists.length})
-          </h2>
+        {/* Playlists / Tracked List */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+          <div className="flex items-center justify-between px-1 mb-1">
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-semibold flex items-center gap-1.5">
+              <Database className="w-3 h-3 text-red-500" />
+              Tracked Playlists ({playlists.length})
+            </h2>
+            <span className="text-[9px] font-mono text-emerald-400 font-semibold">ACTIVE</span>
+          </div>
 
           {playlists.map((pl) => (
             <div
               key={pl.id}
-              className={`p-3.5 rounded-xl bg-slate-800/40 border transition space-y-2.5 ${
+              className={`p-3 rounded-xl bg-zinc-950 border transition space-y-2 ${
                 rateLimitInfo?.playlistId === pl.id
-                  ? 'border-amber-600/50 bg-amber-950/20'
-                  : 'border-slate-800/80 hover:border-slate-700'
+                  ? 'border-amber-500/50 bg-amber-950/20'
+                  : 'border-zinc-900 hover:border-zinc-800 hover:bg-zinc-900/40'
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <h3 className="text-sm font-medium text-slate-200 leading-snug">{pl.name}</h3>
+                <h3 className="text-xs font-semibold text-zinc-200 leading-snug line-clamp-1">{pl.name}</h3>
                 {pl.url && (
                   <a
                     href={pl.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-slate-500 hover:text-slate-300 transition shrink-0"
+                    className="text-zinc-500 hover:text-red-400 transition shrink-0"
                     title="View on YouTube"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -502,48 +575,37 @@ export default function App() {
                 )}
               </div>
 
-              {/* Badges */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Indexed: {pl.indexed_count}
+              {/* Status Badges */}
+              <div className="flex flex-wrap items-center gap-1.5 font-mono">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-900 text-zinc-300 border border-zinc-800">
+                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+                  {pl.indexed_count} INDEXED
                 </span>
-                {pl.new_count !== undefined && (
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                      pl.new_count > 0
-                        ? 'bg-amber-950/60 text-amber-400 border border-amber-800/60'
-                        : 'bg-slate-800/60 text-slate-400 border border-slate-700/60'
-                    }`}
-                  >
-                    New: {pl.new_count}
+                {pl.new_count !== undefined && pl.new_count > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-red-950/60 text-red-300 border border-red-500/30 animate-pulse">
+                    +{pl.new_count} NEW
                   </span>
                 )}
                 {rateLimitInfo?.playlistId === pl.id && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-950/80 text-amber-400 border border-amber-700/70">
-                    <AlertTriangle className="w-3 h-3 text-amber-400" />
-                    Rate Limited
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-950 text-amber-400 border border-amber-600">
+                    THROTTLED
                   </span>
                 )}
               </div>
 
               {/* Single Playlist Sync */}
               {!appConfig.read_only_mode && (
-                <div className="pt-1">
+                <div className="pt-0.5">
                   <button
                     onClick={() => handleSync([pl.id])}
                     disabled={syncing}
-                    className={`w-full py-1 text-[11px] rounded border transition disabled:opacity-50 ${
+                    className={`w-full py-1 text-[10px] font-mono rounded border transition disabled:opacity-50 flex items-center justify-center gap-1 ${
                       rateLimitInfo?.playlistId === pl.id
                         ? 'text-amber-300 hover:text-amber-100 bg-amber-950/40 hover:bg-amber-900/50 border-amber-800/60'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border-slate-800'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-zinc-800/80 hover:border-zinc-700'
                     }`}
                   >
-                    {rateLimitInfo?.playlistId === pl.id
-                      ? 'Retry Sync (Rate Limited)'
-                      : batchSize === 'all'
-                      ? 'Sync This Playlist'
-                      : `Sync Next ${batchSize} Videos`}
+                    <span>[Sync Playlist]</span>
                   </button>
                 </div>
               )}
@@ -552,16 +614,16 @@ export default function App() {
         </div>
       </aside>
 
-      {/* MAIN PANEL: RAG Workspace */}
-      <main className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
-        {/* Rate Limit Notification Banner in Main Workspace */}
+      {/* MAIN PANEL: Workspace */}
+      <main className="flex-1 flex flex-col h-full bg-black yt-grid overflow-hidden relative">
+        {/* Rate Limit Alert Banner in Main Workspace */}
         {rateLimitInfo && (
-          <div className="bg-amber-950/90 border-b border-amber-800/70 px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
+          <div className="bg-amber-950/90 border-b border-amber-500/60 px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.25)] relative z-20 font-mono">
             <div className="flex items-center gap-2 overflow-hidden">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span className="font-semibold text-amber-300 shrink-0">Rate Limit Exceeded:</span>
-              <span className="text-amber-200/90 truncate">
-                Sync is paused because YouTube rate limits have been reached (HTTP 429). Existing indexed videos remain fully searchable.
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+              <span className="font-bold text-amber-300 shrink-0 font-tech">[RATE_LIMIT_ACTIVE]</span>
+              <span className="text-amber-200/90 truncate text-[11px]">
+                YouTube rate limit reached (HTTP 429). Existing indexed video chunks remain fully searchable.
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -571,13 +633,13 @@ export default function App() {
                   handleSync(rateLimitInfo.playlistId ? [rateLimitInfo.playlistId] : undefined);
                 }}
                 disabled={syncing}
-                className="px-2 py-1 text-[11px] font-medium rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 transition disabled:opacity-50"
+                className="px-2.5 py-1 text-[10px] font-mono font-bold rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/50 transition disabled:opacity-50"
               >
-                Retry Sync
+                RETRY
               </button>
               <button
                 onClick={handleDismissRateLimit}
-                className="text-amber-400/80 hover:text-amber-200 p-0.5 rounded hover:bg-amber-900/40"
+                className="text-amber-400/80 hover:text-amber-200 p-1 rounded hover:bg-amber-900/40"
                 title="Dismiss"
               >
                 <X className="w-3.5 h-3.5" />
@@ -585,30 +647,35 @@ export default function App() {
             </div>
           </div>
         )}
-        {/* Controls Bar */}
-        <header className="p-4 border-b border-slate-800 bg-slate-900/30 flex flex-wrap items-center justify-between gap-3 relative z-10">
+
+        {/* Top Control Bar */}
+        <header className="p-3.5 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl flex flex-wrap items-center justify-between gap-3 relative z-10">
+          {/* Target Scope Dropdown */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">Scope:</span>
+            <span className="text-[10px] font-mono tracking-wider uppercase text-zinc-400 flex items-center gap-1 font-semibold">
+              <Terminal className="w-3 h-3 text-red-500" />
+              Scope:
+            </span>
             <select
               value={selectedPlaylist}
               onChange={(e) => setSelectedPlaylist(e.target.value)}
               disabled={mode === 'freeform'}
-              className={`bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500 ${
-                mode === 'freeform' ? 'opacity-50 cursor-not-allowed' : ''
+              className={`bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-red-500 font-mono transition ${
+                mode === 'freeform' ? 'opacity-40 cursor-not-allowed' : ''
               }`}
-              title={mode === 'freeform' ? 'Playlist scope is not applicable in Freeform mode' : undefined}
+              title={mode === 'freeform' ? 'Scope not applicable in Freeform mode' : undefined}
             >
-              <option value="all">All Playlists ({playlists.reduce((acc, p) => acc + p.indexed_count, 0)} videos)</option>
+              <option value="all">All Playlists ({totalIndexedVideos} videos indexed)</option>
               {playlists.map((pl) => (
                 <option key={pl.id} value={pl.id}>
-                  {pl.name} ({pl.indexed_count} videos)
+                  {pl.name} ({pl.indexed_count} indexed)
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Mode Selector Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-slate-900/80 rounded-xl border border-slate-800">
+          {/* Mode Selector */}
+          <div className="flex items-center gap-1 p-1 bg-zinc-900/90 rounded-xl border border-zinc-800 shadow-inner">
             {(['abhijit_ai', 'lookup', 'opinion', 'evolution', 'freeform'] as const).map((m) => {
               const item = modeLabels[m];
               const Icon = item.icon;
@@ -618,16 +685,17 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setMode(m)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition duration-200 ${
                       active
-                        ? 'bg-red-600 text-white shadow-sm shadow-red-900/50'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                        ? `${item.color} shadow-sm border font-semibold`
+                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
-                    {item.label}
+                    <span>{item.label}</span>
                   </button>
-                  {/* Floating Mode Tooltip */}
+
+                  {/* Hover Tooltip */}
                   <div
                     className={`absolute ${
                       m === 'abhijit_ai'
@@ -637,21 +705,12 @@ export default function App() {
                         : 'left-1/2 -translate-x-1/2'
                     } top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none`}
                   >
-                    <div
-                      className={`w-2 h-2 -mb-1 rotate-45 bg-slate-800 border-l border-t border-slate-700 ${
-                        m === 'abhijit_ai'
-                          ? 'self-start ml-6'
-                          : m === 'freeform'
-                          ? 'self-end mr-6'
-                          : ''
-                      }`}
-                    />
-                    <div className="bg-slate-800 text-slate-200 border border-slate-700 text-[11px] rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap font-normal">
-                      <div className="font-semibold text-slate-100 flex items-center gap-1">
-                        <Icon className="w-3 h-3 text-red-400" />
+                    <div className="bg-zinc-900 text-zinc-200 border border-zinc-750 text-[11px] rounded-lg px-3 py-2 shadow-xl whitespace-nowrap font-sans">
+                      <div className="font-tech text-white font-bold flex items-center gap-1.5">
+                        <Icon className="w-3.5 h-3.5 text-red-500" />
                         {item.label}
                       </div>
-                      <div className="text-slate-400 text-[10px] mt-0.5">{item.desc}</div>
+                      <div className="text-zinc-400 text-[10px] mt-0.5 font-mono">{item.desc}</div>
                     </div>
                   </div>
                 </div>
@@ -664,103 +723,145 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Default Empty State */}
           {!chatResponse && !loadingChat && !chatError && (
-            <div className="h-full flex flex-col items-center justify-center max-w-xl mx-auto text-center py-12 text-slate-400">
-              <div className="w-14 h-14 rounded-2xl bg-red-600/10 border border-red-500/20 text-red-400 flex items-center justify-center mb-4">
-                <Sparkles className="w-7 h-7" />
+            <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center py-8">
+              {/* Central YouTube Red Glyph */}
+              <div className="relative flex items-center justify-center w-20 h-20 mb-6">
+                <div className="absolute inset-0 rounded-2xl border border-red-500/20 animate-ping opacity-30" />
+                <div className="w-14 h-14 rounded-2xl bg-red-600/10 border border-red-500/30 text-red-500 flex items-center justify-center shadow-[0_0_25px_rgba(255,0,51,0.2)]">
+                  <Sparkles className="w-7 h-7 text-red-500" />
+                </div>
               </div>
-              <h2 className="text-lg font-semibold text-slate-200 mb-1">YouTube Synthesis & Timestamp Deep Search</h2>
-              <p className="text-xs text-slate-400 mb-6">
-                Ask specific questions to lookup timestamps, request an overall opinion synthesis, analyze opinion evolution over time, ask anything freely, or hear how Abhijit Chavda would hypothetically answer.
+
+              <h2 className="text-xl font-tech tracking-wider text-white font-bold mb-2">
+                YouTube Transcript Search & Opinion Synthesis
+              </h2>
+              <p className="text-xs font-mono text-zinc-400 max-w-lg mb-8 leading-relaxed">
+                Search timestamped transcripts across Abhijit Chavda's video archive. Synthesize opinions across years, locate exact quotes, or converse with Abhijit AI.
               </p>
 
-              {/* Sample Queries */}
-              <div className="grid grid-cols-1 gap-2 w-full text-left">
+              {/* Sample Queries Cards */}
+              <div className="grid grid-cols-1 gap-2.5 w-full text-left font-mono">
                 {[
-                  'What is your take on the multipolar world order and space exploration? (Abhijit AI)',
-                  'What does he say about String Theory and Quantum Mechanics?',
-                  'How has his view on geopolitics and history changed over time?',
-                  'What is his overall philosophy on Indian education and history?',
-                  'Explain quantum computing in simple terms (Freeform)',
+                  {
+                    q: 'What is your take on the multipolar world order and space exploration?',
+                    tag: 'Abhijit AI',
+                    mode: 'abhijit_ai' as const,
+                  },
+                  {
+                    q: 'What does he say about String Theory and Quantum Mechanics?',
+                    tag: 'Find Timestamp',
+                    mode: 'lookup' as const,
+                  },
+                  {
+                    q: 'How has his view on geopolitics and history changed over time?',
+                    tag: 'Opinion Over Time',
+                    mode: 'evolution' as const,
+                  },
+                  {
+                    q: 'What is his overall philosophy on Indian education and history?',
+                    tag: 'Overall Opinion',
+                    mode: 'opinion' as const,
+                  },
+                  {
+                    q: 'Explain quantum computing in simple terms',
+                    tag: 'Freeform',
+                    mode: 'freeform' as const,
+                  },
                 ].map((sample, idx) => (
                   <button
                     key={idx}
                     onClick={() => {
-                      setQuestion(sample);
+                      setQuestion(sample.q);
+                      setMode(sample.mode);
                     }}
-                    className="p-3 text-xs rounded-xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition flex items-center justify-between group"
+                    className="p-3 text-xs rounded-xl bg-zinc-950 border border-zinc-850 hover:border-zinc-700 hover:bg-zinc-900 text-zinc-300 hover:text-white transition duration-200 flex items-center justify-between group shadow-sm"
                   >
-                    <span>{sample}</span>
-                    <span className="text-slate-500 group-hover:text-red-400 transition">↵</span>
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="text-red-500 font-bold shrink-0">&gt;</span>
+                      <span className="truncate">{sample.q}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 group-hover:text-white group-hover:border-zinc-700 border border-zinc-800 transition">
+                        {sample.tag}
+                      </span>
+                      <CornerDownLeft className="w-3.5 h-3.5 text-zinc-600 group-hover:text-red-500 transition" />
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Loading State: show when loading and no streamed response yet */}
+          {/* Loading Indicator */}
           {loadingChat && !chatResponse && (
-            <div className="p-8 max-w-3xl mx-auto rounded-2xl bg-slate-900/40 border border-slate-800/80 animate-pulse space-y-4">
+            <div className="p-8 max-w-3xl mx-auto rounded-2xl bg-zinc-950 border border-zinc-800 shadow-xl space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded-full bg-red-500 animate-ping" />
-                <span className="text-sm text-slate-300 font-medium">
+                <div className="w-3 h-3 rounded-full bg-red-500 animate-ping shrink-0" />
+                <span className="text-xs font-mono tracking-wider text-red-400 font-semibold uppercase">
                   {mode === 'freeform'
                     ? 'Generating freeform response...'
                     : mode === 'abhijit_ai'
-                    ? 'Synthesizing response in Abhijit Chavda persona (#AskAbhijit)...'
-                    : 'Synthesizing transcripts with hybrid vector + FTS retrieval...'}
+                    ? 'Synthesizing #AskAbhijit persona response...'
+                    : 'Searching transcripts & synthesizing response...'}
                 </span>
               </div>
-              <div className="h-4 bg-slate-800 rounded w-3/4" />
-              <div className="h-4 bg-slate-800 rounded w-5/6" />
-              <div className="h-4 bg-slate-800 rounded w-2/3" />
-            </div>
-          )}
-
-          {/* Error State */}
-          {chatError && (
-            <div className="p-4 max-w-3xl mx-auto rounded-xl bg-red-950/40 border border-red-800/60 text-red-200 flex items-start gap-3 text-sm">
-              <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-red-300">Query Failed</p>
-                <p className="text-xs text-red-400/90 mt-0.5">{chatError}</p>
+              <div className="space-y-2">
+                <div className="h-3 bg-zinc-800/80 rounded w-3/4 animate-pulse" />
+                <div className="h-3 bg-zinc-800/80 rounded w-5/6 animate-pulse" />
+                <div className="h-3 bg-zinc-800/80 rounded w-2/3 animate-pulse" />
               </div>
             </div>
           )}
 
-          {/* Response Display */}
+          {/* Error Banner */}
+          {chatError && (
+            <div className="p-4 max-w-3xl mx-auto rounded-xl bg-rose-950/40 border border-rose-500/50 text-rose-200 flex items-start gap-3 text-sm font-mono shadow-lg">
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-rose-300">Synthesis Error</p>
+                <p className="text-xs text-rose-300/90 mt-0.5">{chatError}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Response Output Display */}
           {chatResponse && (
             <div className="max-w-3xl mx-auto space-y-6">
-              {/* Answer Card */}
-              <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-xl space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wide uppercase bg-red-500/10 text-red-400 border border-red-500/20">
-                      Mode: {modeLabels[chatResponse.mode]?.label || chatResponse.mode}
+              {/* Synthesized Answer Card */}
+              <div className="p-6 rounded-2xl bg-zinc-950 border border-zinc-800/90 hover:border-zinc-700 shadow-xl transition duration-300 space-y-4 relative yt-highlight">
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold tracking-wider uppercase border ${
+                      modeLabels[chatResponse.mode]?.badge || 'border-zinc-700 text-zinc-300 bg-zinc-900'
+                    }`}>
+                      {modeLabels[chatResponse.mode]?.label || chatResponse.mode}
                     </span>
+
                     {chatResponse.mode === 'freeform' ? (
-                      <span className="text-xs text-slate-400">
-                        Open inquiry (no video constraints)
+                      <span className="text-[11px] font-mono text-zinc-400">
+                        Freeform Synthesis
                       </span>
                     ) : chatResponse.mode === 'abhijit_ai' ? (
-                      <span className="text-xs text-slate-400">
-                        #AskAbhijit Persona {chatResponse.sources.length > 0 ? `(${chatResponse.sources.length} video citations)` : ''}
+                      <span className="text-[11px] font-mono text-zinc-400">
+                        #AskAbhijit POV • {chatResponse.sources.length} citation{chatResponse.sources.length !== 1 ? 's' : ''}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-400">
-                        {chatResponse.sources.length} citations retrieved
+                      <span className="text-[11px] font-mono text-zinc-400">
+                        {chatResponse.sources.length} video citation{chatResponse.sources.length !== 1 ? 's' : ''} retrieved
                       </span>
                     )}
+
                     {loadingChat && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 font-medium animate-pulse ml-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-                        Generating...
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-red-400 font-semibold animate-pulse ml-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                        Streaming response...
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Markdown Renderer with Custom Links */}
-                <div className="prose prose-invert prose-sm max-w-none text-slate-200 leading-relaxed space-y-3">
+                {/* Markdown Renderer with Custom YouTube Timestamp Chips */}
+                <div className="prose prose-invert prose-sm max-w-none text-zinc-200 leading-relaxed space-y-3 font-sans">
                   <ReactMarkdown
                     components={{
                       a: ({ node, href, children, ...props }) => {
@@ -770,69 +871,78 @@ export default function App() {
                             href={href}
                             target="_blank"
                             rel="noreferrer"
-                            className={`inline-flex items-center gap-1 font-medium transition ${
+                            className={`inline-flex items-center gap-1 font-mono font-medium transition ${
                               isYouTube
-                                ? 'px-2 py-0.5 mx-0.5 rounded-md bg-red-950/50 hover:bg-red-900/60 text-red-400 hover:text-red-300 border border-red-800/50 text-xs no-underline'
-                                : 'text-blue-400 hover:underline'
+                                ? 'px-2 py-0.5 mx-0.5 rounded bg-red-950/60 hover:bg-red-900/80 text-red-300 hover:text-white border border-red-500/40 hover:border-red-400 shadow-[0_0_10px_rgba(255,0,51,0.2)] text-xs no-underline'
+                                : 'text-zinc-300 hover:text-white hover:underline'
                             }`}
                             {...props}
                           >
-                            {isYouTube && <Play className="w-2.5 h-2.5 fill-current" />}
+                            {isYouTube && <Play className="w-2.5 h-2.5 fill-current text-red-500" />}
                             {children}
                           </a>
                         );
                       },
+                      strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+                      code: ({ children }) => (
+                        <code className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-200 font-mono text-[11px]">
+                          {children}
+                        </code>
+                      ),
                     }}
                   >
                     {chatResponse.answer}
                   </ReactMarkdown>
                   {loadingChat && (
-                    <span className="inline-block w-2 h-4 bg-red-500 animate-pulse ml-0.5 align-middle" />
+                    <span className="inline-block w-2 h-4 bg-red-500 animate-pulse ml-0.5 align-middle shadow-[0_0_8px_rgba(255,0,51,0.8)]" />
                   )}
                 </div>
               </div>
 
-              {/* Collapsible Sources Drawer */}
+              {/* Collapsible Evidence & Sources Drawer */}
               {chatResponse.sources.length > 0 && (
-                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 overflow-hidden">
+                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/80 overflow-hidden shadow-lg">
                   <button
                     onClick={() => setShowSources(!showSources)}
-                    className="w-full px-5 py-3.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 transition"
+                    className="w-full px-5 py-3 flex items-center justify-between text-xs font-mono tracking-wider uppercase text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition"
                   >
-                    <span>Cited Transcript Sources ({chatResponse.sources.length})</span>
+                    <span className="flex items-center gap-2">
+                      <Database className="w-3.5 h-3.5 text-red-500" />
+                      Transcript Citations & Sources ({chatResponse.sources.length})
+                    </span>
                     {showSources ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
 
                   {showSources && (
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-slate-800/60">
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-zinc-800/80 bg-black/50">
                       {chatResponse.sources.map((src, i) => (
                         <div
                           key={i}
-                          className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition space-y-2 flex flex-col justify-between"
+                          className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800/90 hover:border-zinc-700 transition space-y-2 flex flex-col justify-between group"
                         >
                           <div>
                             <div className="flex items-start justify-between gap-2">
-                              <h4 className="text-xs font-medium text-slate-200 line-clamp-1">
+                              <h4 className="text-xs font-medium text-zinc-200 line-clamp-1 group-hover:text-white transition">
                                 {src.title}
                               </h4>
                               <a
                                 href={src.url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-red-950/80 text-red-400 border border-red-800/60 hover:bg-red-900/60 transition shrink-0"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-red-950/80 text-red-300 border border-red-500/40 hover:bg-red-900/60 hover:text-white transition shrink-0 shadow-sm"
                               >
-                                <Play className="w-2.5 h-2.5 fill-current" />
+                                <Play className="w-2.5 h-2.5 fill-current text-red-500" />
                                 {src.timestamp_str}
                               </a>
                             </div>
-                            <p className="text-[11px] text-slate-400 line-clamp-3 mt-1.5 leading-relaxed italic">
+                            <p className="text-[11px] text-zinc-400 line-clamp-3 mt-1.5 leading-relaxed italic border-l-2 border-red-500/40 pl-2">
                               "{src.snippet}"
                             </p>
                           </div>
 
-                          <div className="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-slate-900">
-                            <span>Date: {src.upload_date || 'N/A'}</span>
-                            <span className="font-mono">ID: {src.video_id}</span>
+                          <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-2 border-t border-zinc-800/60">
+                            <span>Date: {formatUploadDate(src.upload_date)}</span>
+                            <span className="text-zinc-500">ID: {src.video_id}</span>
                           </div>
                         </div>
                       ))}
@@ -845,23 +955,28 @@ export default function App() {
         </div>
 
         {/* Input Bar */}
-        <footer className="p-4 border-t border-slate-800 bg-slate-900/60">
+        <footer className="p-4 border-t border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xl relative z-10">
           <form onSubmit={handleSubmit} className="max-w-3xl mx-auto flex items-center gap-2">
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder={`Ask a question (Mode: ${modeLabels[mode].label})...`}
-              disabled={loadingChat}
-              className="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 transition disabled:opacity-50"
-            >
-            </input>
+            <div className="relative flex-1">
+              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-red-500 font-mono font-bold text-xs pointer-events-none select-none">
+                //&gt;
+              </div>
+              <input
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder={`Ask a question across indexed episodes (${modeLabels[mode].label})...`}
+                disabled={loadingChat}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 font-sans transition disabled:opacity-50 shadow-inner"
+              />
+            </div>
             <button
               type="submit"
               disabled={loadingChat || !question.trim()}
-              className="px-5 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium text-sm transition disabled:opacity-40 shadow-sm shadow-red-900/50 shrink-0"
+              className="px-5 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-mono font-bold text-xs tracking-wider transition disabled:opacity-30 shadow-[0_0_15px_rgba(255,0,51,0.25)] hover:shadow-[0_0_20px_rgba(255,0,51,0.45)] shrink-0 flex items-center gap-1.5"
             >
-              Ask
+              <span>Ask</span>
+              <CornerDownLeft className="w-3.5 h-3.5" />
             </button>
           </form>
         </footer>

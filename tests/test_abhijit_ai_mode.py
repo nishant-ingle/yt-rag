@@ -71,21 +71,34 @@ class TestAbhijitAIMode(unittest.TestCase):
         lookup_prompt, _, _ = rag.build_prompt_and_sources("Who ruled Maurya?", [dummy_chunk], "lookup")
         self.assertIn("Avoid rigid, hard-coded boilerplate openings", lookup_prompt)
         self.assertIn("starting lines like the ones used in the transcripts", lookup_prompt)
+        self.assertIn("Abhijit Chavda", lookup_prompt)
+        self.assertIn("NOT Abhijit Iyer-Mitra", lookup_prompt)
 
         # Opinion mode
         opinion_prompt, _, _ = rag.build_prompt_and_sources("What is his opinion?", [dummy_chunk], "opinion")
         self.assertIn("Avoid repetitive, hard-coded boilerplate", opinion_prompt)
         self.assertIn("authentic starting lines like those found in the transcripts", opinion_prompt)
+        self.assertIn("Abhijit Chavda", opinion_prompt)
+        self.assertIn("NOT Abhijit Iyer-Mitra", opinion_prompt)
 
         # Evolution mode
         evolution_prompt, _, _ = rag.build_prompt_and_sources("How did views evolve?", [dummy_chunk], "evolution")
         self.assertIn("Avoid formulaic, hard-coded opening lines", evolution_prompt)
         self.assertIn("mirror the historical progression in the transcripts", evolution_prompt)
+        self.assertIn("Abhijit Chavda", evolution_prompt)
+        self.assertIn("NOT Abhijit Iyer-Mitra", evolution_prompt)
 
         # Freeform mode
         freeform_prompt, _, _ = rag.build_prompt_and_sources("Explain calculus", [], "freeform")
         self.assertIn("Avoid canned, hard-coded AI opening lines", freeform_prompt)
         self.assertIn("open naturally and dynamically", freeform_prompt)
+        self.assertIn("Abhijit Chavda", freeform_prompt)
+        self.assertIn("NOT Abhijit Iyer-Mitra", freeform_prompt)
+
+        # Abhijit AI mode
+        ai_prompt, _, _ = rag.build_prompt_and_sources("What is your take?", [dummy_chunk], "abhijit_ai")
+        self.assertIn("Abhijit Chavda", ai_prompt)
+        self.assertIn("NOT Abhijit Iyer-Mitra", ai_prompt)
 
     def test_build_prompt_and_sources_abhijit_ai_without_chunks(self):
         sys_prompt, user_content, sources = rag.build_prompt_and_sources(

@@ -4,7 +4,8 @@
 
 A high-performance, embedded Retrieval-Augmented Generation (RAG) system designed to index YouTube playlists, extract timestamped transcripts, and answer nuanced questions with exact timestamp deep links, overall opinion synthesis, and longitudinal opinion evolution over time.
 
-![yt-rag Opinion Synthesis UI](<images/opinion on string theory.png>)
+## yt-rag Opinion Synthesis UI
+<video src="images/video.mp4" style="/*display: block; */margin: auto; width: 60rem; max-width: 100%; height: auto;" autoplay loop muted playsinline></video>
 
 Focused initially on **Abhijit Chavda**'s channel ([@AbhijitChavda](https://www.youtube.com/@AbhijitChavda)) with playlists:
 - **#AskAbhijit Show**: [YouTube Playlist](https://www.youtube.com/playlist?list=PLSw9nXpYo3m6Bb_MVBgd0jRE3U4hJvZkd)
@@ -44,6 +45,36 @@ That's it! The script automatically:
 - Sets up the Python virtual environment and installs dependencies
 - Builds the React frontend UI
 - Starts the server at [http://localhost:8000](http://localhost:8000)
+
+---
+
+## Running with Docker
+
+You can also build and run `yt-rag` as a standalone container with zero local Python or Node.js dependencies installed:
+
+### 1. Build the Docker Image
+```bash
+docker build -t yt-rag .
+```
+
+### 2. Run the Container
+```bash
+docker run -p 8000:8000 --env-file .env yt-rag
+```
+*(Or pass the API key directly: `docker run -p 8000:8000 -e LLM_API_KEY=sk-... yt-rag`)*
+
+Open [http://localhost:8000](http://localhost:8000) in your browser.
+
+> [!TIP]
+> **Persistent Data & Read-Write Mode**:
+> By default, the container includes the pre-indexed database (`data/rag.db`) in read-only snapshot mode (`READ_ONLY_MODE=true`). To persist newly synced playlists or enable full write access, mount the `data` directory and set `READ_ONLY_MODE=false`:
+> ```bash
+> docker run -p 8000:8000 \
+>   -v $(pwd)/data:/app/data \
+>   -e READ_ONLY_MODE=false \
+>   --env-file .env \
+>   yt-rag
+> ```
 
 ---
 
